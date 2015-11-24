@@ -4,6 +4,7 @@
 #include <functional>
 #include <mutex>
 #include <queue>
+#include <future>
 
 #include <mpd/client.h>
 
@@ -21,7 +22,13 @@ struct mpd_control
     void next_song();
     void prev_song();
 
+    std::future<std::string> get_current_title();
+    std::future<std::string> get_current_artist();
+    std::future<std::string> get_current_album();
+
     private:
+
+    std::future<std::string> get_current_tag(enum mpd_tag_type type);
 
     void add_external_task(std::function<void(mpd_connection *)> t);
 
@@ -35,6 +42,9 @@ struct mpd_control
 
     std::mutex _external_tasks_mutex;
     std::deque<std::function<void(mpd_connection *)>> _external_tasks;
+
+    std::mutex _external_song_queries_mutex;
+    std::deque<std::function<void(mpd_connection *, mpd_song *)>> _external_song_queries;
 };
 
 #endif

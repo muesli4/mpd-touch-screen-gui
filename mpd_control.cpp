@@ -1,8 +1,10 @@
 #include <chrono>
 #include <thread>
+#include <memory>
 
 #include "mpd_control.hpp"
 #include "util.hpp"
+
 
 mpd_control::mpd_control(std::function<void(std::string)> new_song_path_cb)
     : _c(mpd_connection_new(0, 0, 0))
@@ -47,13 +49,26 @@ void mpd_control::run()
             }
             last_song = song;
         }
-        scoped_lock lock(_external_tasks_mutex);
-
-        while (!_external_tasks.empty())
         {
-            _external_tasks.front()(_c);
-            _external_tasks.pop_front();
+            scoped_lock lock(_external_tasks_mutex);
+
+            while (!_external_tasks.empty())
+            {
+                _external_tasks.front()(_c);
+                _external_tasks.pop_front();
+            }
         }
+        {
+            scoped_lock lock(_external_song_queries_mutex);
+
+            while (!_external_song_queries.empty())
+            {
+                _external_song_queries.front()(_c, last_song);
+                _external_song_queries.pop_front();
+            }
+        }
+
+
 
     }
     mpd_song_free(last_song);
@@ -98,6 +113,40 @@ void mpd_control::prev_song()
 {
     add_external_task([](mpd_connection * c){ mpd_run_previous(c); });
 }
+
+std::future<std::string> mpd_control::get_current_title()
+{
+    return get_current_tag(MPD_TAG_TITLE);
+}
+
+std::future<std::string> mpd_control::get_current_artist()
+{
+    return get_current_tag(MPD_TAG_ARTIST);
+}
+
+std::future<std::string> mpd_control::get_current_album()
+{
+    return get_current_tag(MPD_TAG_ALBUM);
+}
+
+std::future<std::string> mpd_control::get_current_tag(enum mpd_tag_type type)
+{
+    typedef std::promise<std::string> promise_type;
+    // TODO make_unique
+    std::shared_ptr<promise_type> promise_ptr = std::make_shared<promise_type>();
+
+    {
+        scoped_lock lock(_external_song_queries_mutex);
+        _external_song_queries.push_back([type, promise_ptr](mpd_connection * c, mpd_song * s)
+        {
+            promise_ptr->set_value(std::string(mpd_song_get_tag(s, type, 0)));
+        }
+        );
+    }
+
+    return promise_ptr->get_future();
+}
+
 
 void mpd_control::add_external_task(std::function<void(mpd_connection *)> t)
 {

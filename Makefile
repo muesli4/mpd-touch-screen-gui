@@ -1,6 +1,6 @@
 CXX      = g++
 
-LIBS     = SDL2_image sdl2 libmpdclient
+LIBS     = SDL2_ttf SDL2_image sdl2 libmpdclient
 
 CXXFLAGS = '-std=c++11' '-std=gnu++11' '-Wall' `pkg-config --cflags $(LIBS)`
 LDFLAGS  = `pkg-config --libs $(LIBS)`

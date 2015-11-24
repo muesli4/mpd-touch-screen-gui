@@ -13,6 +13,7 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
 
 #include "mpd_control.hpp"
 #include "util.hpp"
@@ -33,7 +34,14 @@ void show_rect(SDL_Rect const & r)
     std::cout << r.x << " " << r.y << " on " << r.w << "x" << r.h << std::endl;
 }
 
-void draw_cover(std::string rel_song_dir_path, SDL_Surface * surface, SDL_Window * window)
+void draw_cover( std::string rel_song_dir_path
+               , std::string title
+               , std::string artist
+               , std::string album
+               , TTF_Font * font
+               , SDL_Surface * surface
+               , SDL_Window * window
+               )
 {
     std::string const abs_cover_path = std::string(base_dir) + rel_song_dir_path;
 
@@ -91,7 +99,33 @@ void draw_cover(std::string rel_song_dir_path, SDL_Surface * surface, SDL_Window
         }
     }
 
-    SDL_FillRect(surface, 0, SDL_MapRGB(surface->format, 0, 0, 0));
+    {
+        SDL_FillRect(surface, 0, SDL_MapRGB(surface->format, 0, 0, 0));
+
+        SDL_Color font_color = { 255, 255, 255, 255 };
+
+        std::array<std::string const, 3> lines = { title, artist, album };
+
+        int y_offset = 20;
+
+        for (auto & line : lines)
+        {
+
+            SDL_Surface * text_surface =
+                TTF_RenderUTF8_Blended( font
+                                      , line.c_str()
+                                      , font_color
+                                      );
+            if (text_surface != 0)
+            {
+                SDL_Rect r = { 20, y_offset, text_surface->w, text_surface->h };
+                SDL_BlitSurface(text_surface, 0, surface, &r);
+                SDL_FreeSurface(text_surface);
+            }
+            y_offset += text_surface->h + 10;
+        }
+    }
+
 exit:
     SDL_UpdateWindowSurface(window);
 }
@@ -116,17 +150,40 @@ int main(int argc, char * argv[])
 
     std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
 
-    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
     std::atexit(SDL_Quit);
 
     // determine screen size of display 0
-    std::cout << SDL_GetNumVideoDisplays() << std::endl;
     SDL_DisplayMode mode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
     if (SDL_GetDisplayMode(0, 0, &mode) != 0)
     {
-        std::cerr << "Could not determine screen size:" << SDL_GetError() << '.' << std::endl;
+        std::cerr << "Could not determine screen size:"
+                  << SDL_GetError() << '.' << std::endl;
         std::exit(0);
     }
+
+    // font rendering setup
+    if (TTF_Init() == -1)
+    {
+        std::cerr << "Could not initialize font rendering:"
+                  << TTF_GetError() << '.' << std::endl;
+        std::exit(0);
+    }
+    else
+    {
+        std::atexit(TTF_Quit);
+    }
+
+    TTF_Font * font = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", 20);
+
+    if (font == 0)
+    {
+        std::cerr << "Could not load font:"
+                  << TTF_GetError() << '.' << std::endl;
+        std::exit(0);
+    }
+
+    //TTF_SetFontStyle(font, TTF_STYLE_BOLD);
 
     // create window
     SDL_Window * window = SDL_CreateWindow
@@ -224,7 +281,15 @@ int main(int argc, char * argv[])
                 // redraw cover if it is a new one
                 if (new_song_dir_path != last_song_dir_path)
                 {
-                    draw_cover(new_song_dir_path, screen, window);
+
+                    draw_cover( new_song_dir_path
+                              , mpdc.get_current_title().get()
+                              , mpdc.get_current_artist().get()
+                              , mpdc.get_current_album().get()
+                              , font
+                              , screen
+                              , window
+                              );
 
                     last_song_dir_path.swap(new_song_dir_path);
                     new_song_dir_path.clear();
@@ -240,6 +305,9 @@ int main(int argc, char * argv[])
 
     mpdc.stop();
     mpdc_thread.join();
+
+    TTF_CloseFont(font);
+    TTF_Quit();
 
     SDL_DestroyWindow(window);
     SDL_Quit();
