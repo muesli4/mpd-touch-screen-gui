@@ -28,10 +28,13 @@ int const base_dir_len = sizeof(base_dir);
 std::array<std::string const, 3> const exts = { "png", "jpeg", "jpg" };
 std::array<std::string const, 3> const names = { "front", "cover", "back" };
 
+void show_rect(SDL_Rect const & r)
+{
+    std::cout << r.x << " " << r.y << " on " << r.w << "x" << r.h << std::endl;
+}
+
 void draw_cover(std::string rel_song_dir_path, SDL_Surface * surface, SDL_Window * window)
 {
-    // TODO keep picture ratio
-    SDL_Rect screen_pos = { 40, 0, 240, 240 };
     std::string const abs_cover_path = std::string(base_dir) + rel_song_dir_path;
 
     SDL_Surface * cover = 0;
@@ -41,10 +44,48 @@ void draw_cover(std::string rel_song_dir_path, SDL_Surface * surface, SDL_Window
         {
             std::string cover_path = abs_cover_path + name + "." + ext;
             cover = IMG_Load(cover_path.c_str());
+
             if (cover != 0)
             {
-                SDL_Rect cover_rect = { 0, 0, cover->w, cover->h };
+                // draw cover while retaining image ratio
+                int const w = surface->w;
+                int const h = surface->h;
+                int const cw = cover->w;
+                int const ch = cover->h;
+
+                double const surface_ratio = static_cast<double>(w) / static_cast<double>(h);
+                double const cover_ratio = static_cast<double>(cw) / static_cast<double>(ch);
+
+                bool const surface_wider = surface_ratio >= cover_ratio;
+
+                int const rw = surface_wider ? cover_ratio * h : w;
+                int const rh = surface_wider ? h : (1 / cover_ratio) * w;
+
+                int const pad_x = (w - rw) / 2;
+                int const pad_y = (h - rh) / 2;
+
+                SDL_Rect cover_rect = { 0, 0, cw, ch };
+                SDL_Rect screen_pos = { pad_x, pad_y, rw, rh };
                 SDL_BlitScaled(cover, &cover_rect, surface, &screen_pos);
+
+                // fill remaining rects
+                if (surface_wider)
+                {
+                    SDL_Rect left = { 0, 0, pad_x, h };
+                    SDL_FillRect(surface, &left, SDL_MapRGB(surface->format, 0, 0, 0));
+
+                    SDL_Rect right = { w - pad_x, 0, pad_x, h };
+                    SDL_FillRect(surface, &right, SDL_MapRGB(surface->format, 0, 0, 0));
+                }
+                else
+                {
+                    SDL_Rect top = { 0, 0, w, pad_y };
+                    SDL_FillRect(surface, &top, SDL_MapRGB(surface->format, 0, 0, 0));
+
+                    SDL_Rect bottom = { 0, h - pad_y, w, pad_y };
+                    SDL_FillRect(surface, &bottom, SDL_MapRGB(surface->format, 0, 0, 0));
+                }
+
                 goto exit;
             }
         }
@@ -76,15 +117,29 @@ int main(int argc, char * argv[])
     std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
 
     SDL_Init(SDL_INIT_VIDEO);
+    std::atexit(SDL_Quit);
+
+    // determine screen size of display 0
+    std::cout << SDL_GetNumVideoDisplays() << std::endl;
+    SDL_DisplayMode mode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
+    if (SDL_GetDisplayMode(0, 0, &mode) != 0)
+    {
+        std::cerr << "Could not determine screen size:" << SDL_GetError() << '.' << std::endl;
+        std::exit(0);
+    }
+
+    // create window
     SDL_Window * window = SDL_CreateWindow
         ( "cover"
         , SDL_WINDOWPOS_UNDEFINED
         , SDL_WINDOWPOS_UNDEFINED
+#ifndef __arm__
         , 320
         , 240
-#ifndef __arm__
         , 0
 #else
+        , mode.w
+        , mode.h
         , SDL_WINDOW_FULLSCREEN
 #endif
         );
