@@ -55,6 +55,16 @@ void draw_cover( std::string rel_song_dir_path
 
             if (cover != 0)
             {
+
+                // TODO store current cover as converted surface
+                // cover = SDL_ConvertSurface(cover, surface->format, 0);
+
+                // if (cover == 0)
+                // {
+                //     std::cerr << "fail" << std::endl;
+                //     return;
+                // }
+
                 // draw cover while retaining image ratio
                 int const w = surface->w;
                 int const h = surface->h;
@@ -98,7 +108,6 @@ void draw_cover( std::string rel_song_dir_path
             }
         }
     }
-
     {
         SDL_FillRect(surface, 0, SDL_MapRGB(surface->format, 0, 0, 0));
 
@@ -110,32 +119,51 @@ void draw_cover( std::string rel_song_dir_path
 
         for (auto & line : lines)
         {
-
             SDL_Surface * text_surface =
                 TTF_RenderUTF8_Blended( font
                                       , line.c_str()
                                       , font_color
                                       );
+
             if (text_surface != 0)
             {
                 SDL_Rect r = { 20, y_offset, text_surface->w, text_surface->h };
                 SDL_BlitSurface(text_surface, 0, surface, &r);
                 SDL_FreeSurface(text_surface);
+                y_offset += text_surface->h + 10;
             }
-            y_offset += text_surface->h + 10;
         }
     }
-
 exit:
     SDL_UpdateWindowSurface(window);
 }
+
+struct song
+{
+    song(std::string t, std::string ar, std::string al, std::string p)
+        : title(t)
+        , artist(ar)
+        , album(al)
+        , path(p)
+    {
+    }
+    std::string title;
+    std::string artist;
+    std::string album;
+    std::string path;
+};
 
 int main(int argc, char * argv[])
 {
 
     // TODO move to config
-    unsigned int const MOVEMENT_THRESHOLD_X = 30;
-    unsigned int const MOVEMENT_THRESHOLD_Y = MOVEMENT_THRESHOLD_X;
+    //
+    unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
+    unsigned int const SWIPE_THRESHOLD_LOW_Y = SWIPE_THRESHOLD_LOW_X;
+    unsigned int const TOUCH_THRESHOLD_HIGH = 10;
+
+    // determines how ambiguous a swipe has to be
+    double const DIR_UNAMBIG_FACTOR_THRESHOLD = 0.3;
 
     std::mutex new_song_mailbox_mutex;
     std::queue<std::string> new_song_mailbox;
@@ -233,10 +261,10 @@ int main(int argc, char * argv[])
                 unsigned int abs_ydiff = std::abs(ydiff);
 
                 // swipe detection
-                if (abs_xdiff > MOVEMENT_THRESHOLD_X || abs_ydiff > MOVEMENT_THRESHOLD_Y)
+                if (abs_xdiff > SWIPE_THRESHOLD_LOW_X || abs_ydiff > SWIPE_THRESHOLD_LOW_Y)
                 {
                     // y is volume
-                    if (abs_ydiff > abs_xdiff)
+                    if (abs_ydiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= abs_xdiff)
                     {
                         if (ydiff < 0)
                         {
@@ -248,7 +276,7 @@ int main(int argc, char * argv[])
                         }
                     }
                     // x is song
-                    else
+                    else if (abs_xdiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= abs_ydiff)
                     {
                         if (xdiff > 0)
                         {
@@ -260,28 +288,29 @@ int main(int argc, char * argv[])
                         }
                     }
                 }
-                else
+                else if (abs_xdiff < TOUCH_THRESHOLD_HIGH && abs_ydiff < TOUCH_THRESHOLD_HIGH)
                 {
                     mpdc.toggle_pause();
                 }
             }
         }
         {
-            new_song_mailbox_mutex.lock();
+
+            std::unique_lock<std::mutex> lock(new_song_mailbox_mutex);
 
             if (!new_song_mailbox.empty())
             {
                 std::string new_song_path = new_song_mailbox.front();
                 new_song_mailbox.pop();
 
-                new_song_mailbox_mutex.unlock();
+                lock.unlock();
+
 
                 std::string new_song_dir_path = basename(new_song_path);
 
                 // redraw cover if it is a new one
                 if (new_song_dir_path != last_song_dir_path)
                 {
-
                     draw_cover( new_song_dir_path
                               , mpdc.get_current_title().get()
                               , mpdc.get_current_artist().get()
@@ -294,10 +323,6 @@ int main(int argc, char * argv[])
                     last_song_dir_path.swap(new_song_dir_path);
                     new_song_dir_path.clear();
                 }
-            }
-            else
-            {
-                new_song_mailbox_mutex.unlock();
             }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
