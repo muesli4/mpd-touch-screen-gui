@@ -157,10 +157,14 @@ int main(int argc, char * argv[])
 {
 
     // TODO move to config
-    //
+    // determines the minimum length of a swipe
     unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
     unsigned int const SWIPE_THRESHOLD_LOW_Y = SWIPE_THRESHOLD_LOW_X;
+
+    // determines how long a swipe is still recognized as a touch
     unsigned int const TOUCH_THRESHOLD_HIGH = 10;
+
+    char const * const DEFAULT_FONT_PATH = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
 
     // determines how ambiguous a swipe has to be
     double const DIR_UNAMBIG_FACTOR_THRESHOLD = 0.3;
@@ -202,7 +206,7 @@ int main(int argc, char * argv[])
         std::atexit(TTF_Quit);
     }
 
-    TTF_Font * font = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", 20);
+    TTF_Font * font = TTF_OpenFont(DEFAULT_FONT_PATH, 20);
 
     if (font == 0)
     {
@@ -215,7 +219,7 @@ int main(int argc, char * argv[])
 
     // create window
     SDL_Window * window = SDL_CreateWindow
-        ( "cover"
+        ( "mpc-touch-lcd-gui"
         , SDL_WINDOWPOS_UNDEFINED
         , SDL_WINDOWPOS_UNDEFINED
 #ifndef __arm__
@@ -321,7 +325,6 @@ int main(int argc, char * argv[])
                               );
 
                     last_song_dir_path.swap(new_song_dir_path);
-                    new_song_dir_path.clear();
                 }
             }
         }
