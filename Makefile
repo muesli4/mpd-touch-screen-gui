@@ -12,3 +12,11 @@ main: $(OBJ)
 
 %.o: %.c
 	$(CXX) $(CXXFLAGS) -c $<
+
+install: main
+	cp main /usr/bin/mpd-touch-screen-gui
+
+replace: main
+	systemctl --user stop startx
+	sudo cp main /usr/bin/cover
+	systemctl --user start startx
