@@ -139,7 +139,8 @@ std::future<std::string> mpd_control::get_current_tag(enum mpd_tag_type type)
         scoped_lock lock(_external_song_queries_mutex);
         _external_song_queries.push_back([type, promise_ptr](mpd_connection * c, mpd_song * s)
         {
-            promise_ptr->set_value(std::string(mpd_song_get_tag(s, type, 0)));
+            char const * const cstr = mpd_song_get_tag(s, type, 0);
+            promise_ptr->set_value(std::string(cstr == 0 ? "" : cstr));
         }
         );
     }
