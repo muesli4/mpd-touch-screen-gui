@@ -6,6 +6,9 @@
 #include <queue>
 #include <array>
 
+#include <iterator>
+#include <algorithm>
+
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -43,7 +46,26 @@ void draw_cover( std::string rel_song_dir_path
                , SDL_Window * window
                )
 {
-    std::string const abs_cover_path = std::string(base_dir) + rel_song_dir_path;
+    // try to detect, whether we need to look for the album cover in the super directory
+    std::size_t const super_dir_sep_pos = rel_song_dir_path.find_last_of(PATH_SEP, rel_song_dir_path.size() - 2);
+
+    bool has_discnumber = false;
+    if (super_dir_sep_pos != std::string::npos)
+    {
+        std::string const super_dir =
+            rel_song_dir_path.substr(super_dir_sep_pos + 1, rel_song_dir_path.size() - 2 - super_dir_sep_pos);
+
+        if (super_dir.find("CD ") == 0
+            && std::all_of(std::next(super_dir.begin(), 3), super_dir.end(), ::isdigit)
+           )
+        {
+            has_discnumber = true;
+        }
+    }
+
+    std::string const abs_cover_path =
+        std::string(base_dir) +
+        (has_discnumber ? rel_song_dir_path.substr(0, super_dir_sep_pos + 1) : rel_song_dir_path);
 
     SDL_Surface * cover = 0;
     for (auto & name : names)
@@ -55,7 +77,6 @@ void draw_cover( std::string rel_song_dir_path
 
             if (cover != 0)
             {
-
                 // TODO store current cover as converted surface
                 // cover = SDL_ConvertSurface(cover, surface->format, 0);
 
@@ -109,6 +130,7 @@ void draw_cover( std::string rel_song_dir_path
         }
     }
     {
+        //std::cout << "No cover found under: " << abs_cover_path << std::endl;
         SDL_FillRect(surface, 0, SDL_MapRGB(surface->format, 0, 0, 0));
 
         SDL_Color font_color = { 255, 255, 255, 255 };
@@ -162,12 +184,18 @@ int main(int argc, char * argv[])
     unsigned int const SWIPE_THRESHOLD_LOW_Y = SWIPE_THRESHOLD_LOW_X;
 
     // determines how long a swipe is still recognized as a touch
-    unsigned int const TOUCH_THRESHOLD_HIGH = 10;
+    unsigned int const TOUCH_DISTANCE_THRESHOLD_HIGH = 10;
 
     char const * const DEFAULT_FONT_PATH = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
 
     // determines how ambiguous a swipe has to be
     double const DIR_UNAMBIG_FACTOR_THRESHOLD = 0.3;
+
+    // the time to wait after a swipe, before allowing touch events
+    unsigned int SWIPE_WAIT_DEBOUNCE_MS_THRESHOLD = 400;
+
+    // allows swipes with multiple lines, as long as the time between them is below this TODO not implemented
+    unsigned int const TOUCH_DEBOUNCE_TIME_MS_THRESHOLD_MAX = 200;
 
     std::mutex new_song_mailbox_mutex;
     std::queue<std::string> new_song_mailbox;
@@ -239,10 +267,16 @@ int main(int argc, char * argv[])
     int x;
     int y;
     std::string last_song_dir_path;
+    bool pressed = false;
+    std::chrono::steady_clock::time_point last_swipe_time_point;
     while (run)
     {
 
         SDL_Event ev;
+
+
+        //std::chrono::steady_clock::time_point down_time_point = std::chrono::steady_clock::now();
+
         while (SDL_PollEvent(&ev) == 1)
         {
             if (ev.type == SDL_QUIT)
@@ -253,48 +287,72 @@ int main(int argc, char * argv[])
             //else if (ev.type == SDL_FINGERDOWN)
             else if (ev.type == SDL_MOUSEBUTTONDOWN)
             {
-                x = ev.button.x;
-                y = ev.button.y;
+                if (!pressed)
+                {
+                    x = ev.button.x;
+                    y = ev.button.y;
+
+                    pressed = true;
+
+                    //down_time_point = std::chrono::steady_clock::now();
+                }
             }
             else if (ev.type == SDL_MOUSEBUTTONUP)
             {
-                int xdiff = ev.button.x - x;
-                int ydiff = ev.button.y - y;
+                std::chrono::steady_clock::time_point up_time_point = std::chrono::steady_clock::now();
 
-                unsigned int abs_xdiff = std::abs(xdiff);
-                unsigned int abs_ydiff = std::abs(ydiff);
-
-                // swipe detection
-                if (abs_xdiff > SWIPE_THRESHOLD_LOW_X || abs_ydiff > SWIPE_THRESHOLD_LOW_Y)
+                    
+                // filter out bumps
+                if (pressed)
                 {
-                    // y is volume
-                    if (abs_ydiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= abs_xdiff)
+
+                    int xdiff = ev.button.x - x;
+                    int ydiff = ev.button.y - y;
+
+                    unsigned int abs_xdiff = std::abs(xdiff);
+                    unsigned int abs_ydiff = std::abs(ydiff);
+
+                    // swipe detection
+                    if (abs_xdiff > SWIPE_THRESHOLD_LOW_X || abs_ydiff > SWIPE_THRESHOLD_LOW_Y)
                     {
-                        if (ydiff < 0)
+                        last_swipe_time_point = std::chrono::steady_clock::now();
+
+                        // y is volume
+                        if (abs_ydiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= abs_xdiff)
                         {
-                            mpdc.inc_volume(5);
+                            if (ydiff < 0)
+                            {
+                                mpdc.inc_volume(5);
+                            }
+                            else
+                            {
+                                mpdc.dec_volume(5);
+                            }
                         }
-                        else
+                        // x is song
+                        else if (abs_xdiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= abs_ydiff)
                         {
-                            mpdc.dec_volume(5);
+                            if (xdiff > 0)
+                            {
+                                mpdc.next_song();
+                            }
+                            else
+                            {
+                                mpdc.prev_song();
+                            }
                         }
                     }
-                    // x is song
-                    else if (abs_xdiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= abs_ydiff)
+                    // check if the finger didn't move a lot and whether we're not doing a swipe motion directly before
+                    else if (   abs_xdiff < TOUCH_DISTANCE_THRESHOLD_HIGH
+                             && abs_ydiff < TOUCH_DISTANCE_THRESHOLD_HIGH
+                             && std::chrono::duration_cast<std::chrono::milliseconds>(up_time_point - last_swipe_time_point).count()
+                                > SWIPE_WAIT_DEBOUNCE_MS_THRESHOLD
+                            )
                     {
-                        if (xdiff > 0)
-                        {
-                            mpdc.next_song();
-                        }
-                        else
-                        {
-                            mpdc.prev_song();
-                        }
+                        mpdc.toggle_pause();
                     }
-                }
-                else if (abs_xdiff < TOUCH_THRESHOLD_HIGH && abs_ydiff < TOUCH_THRESHOLD_HIGH)
-                {
-                    mpdc.toggle_pause();
+
+                    pressed = false;
                 }
             }
         }
