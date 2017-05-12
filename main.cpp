@@ -27,6 +27,7 @@ char const base_dir [] = "/home/moritz/Musik/";
 char const base_dir [] = "/mnt/music/library/";
 #endif
 
+// determines the minimum length of a swipe
 unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
 unsigned int const SWIPE_THRESHOLD_LOW_Y = SWIPE_THRESHOLD_LOW_X;
 
@@ -252,7 +253,7 @@ bool within_rect(int x, int y, SDL_Rect const & r)
     return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 }
 
-bool pressed_and_let_go_in(SDL_Rect const & r, gui_event_info const & gei)
+bool pressed_and_released_in(SDL_Rect const & r, gui_event_info const & gei)
 {
     // both clicks lie within r
     return within_rect(gei.x, gei.y, r) && within_rect(gei.last_x, gei.last_y, r)
@@ -266,7 +267,7 @@ bool button( SDL_Rect box
            , SDL_Surface * screen
            )
 {
-    bool activated = pressed_and_let_go_in(box, gei);
+    bool activated = pressed_and_released_in(box, gei);
 
     (within_rect(gei.x, gei.y, box) && gei.pressed ? draw_pressed : draw_idle)(screen, box);
 
@@ -389,8 +390,6 @@ int main(int argc, char * argv[])
 {
 
     // TODO move to config
-    // determines the minimum length of a swipe
-
     char const * const DEFAULT_FONT_PATH = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
 
     // allows swipes with multiple lines, as long as the time between them is below this TODO not implemented
@@ -466,7 +465,6 @@ int main(int argc, char * argv[])
         [&](bool value)
         {
             push_change_event(change_event_type, user_event::RANDOM_CHANGED, random, value);
-            std::cout << value << std::endl;
         }
     );
 
@@ -502,7 +500,8 @@ int main(int argc, char * argv[])
                                                                                };
                 for (int i = 0; i < 6; i++)
                 {
-                    if (button( {0, i * 40, 40, 40}
+                    SDL_Rect button_rect = {0, i * 40, 40, 40};
+                    if (button( button_rect
                               , [](SDL_Surface * s, SDL_Rect const & rect) { SDL_FillRect(s, &rect, SDL_MapRGB(s->format, 0, 0, 0)); }
                               , [](SDL_Surface * s, SDL_Rect const & rect) { SDL_FillRect(s, &rect, SDL_MapRGB(s->format, 255, 255, 255)); }
                               , gei
@@ -510,8 +509,6 @@ int main(int argc, char * argv[])
                               )
                     )
                         global_button_functions[i]();
-
-                    SDL_Rect button_rect = {0, i * 40, 40, 40};
                     SDL_UpdateWindowSurfaceRects(window, &button_rect, 1);
                 }
 
