@@ -37,14 +37,7 @@ void show_rect(SDL_Rect const & r)
     std::cout << r.x << " " << r.y << " on " << r.w << "x" << r.h << std::endl;
 }
 
-void draw_cover( std::string rel_song_dir_path
-               , std::string title
-               , std::string artist
-               , std::string album
-               , TTF_Font * font
-               , SDL_Surface * surface
-               , SDL_Window * window
-               )
+std::string cover_abs_path(std::string rel_song_dir_path)
 {
     // try to detect, whether we need to look for the album cover in the super directory
     std::size_t const super_dir_sep_pos = rel_song_dir_path.find_last_of(PATH_SEP, rel_song_dir_path.size() - 2);
@@ -63,14 +56,68 @@ void draw_cover( std::string rel_song_dir_path
         }
     }
 
-    std::string const abs_cover_path =
-        std::string(base_dir) +
-        (has_discnumber ? rel_song_dir_path.substr(0, super_dir_sep_pos + 1) : rel_song_dir_path);
+    return std::string(base_dir) + (has_discnumber ? rel_song_dir_path.substr(0, super_dir_sep_pos + 1) : rel_song_dir_path);
+}
+
+// blit a surface to another surface while preserving aspect ratio
+void blit_preserve_ar(SDL_Surface * source, SDL_Surface * dest, SDL_Rect * destrect)
+{
+    int const w = destrect->w;
+    int const h = destrect->h;
+
+    int const sw = source->w;
+    int const sh = source->h;
+
+    double const dest_ratio = static_cast<double>(w) / static_cast<double>(h);
+    double const source_ratio = static_cast<double>(sw) / static_cast<double>(sh);
+
+    bool const dest_wider = dest_ratio >= source_ratio;
+
+    // remaining width and height
+    int const rw = dest_wider ? source_ratio * h : w;
+    int const rh = dest_wider ? h : (w / source_ratio);
+
+    int const pad_x = (w - rw) / 2;
+    int const pad_y = (h - rh) / 2;
+
+    SDL_Rect cover_rect = { 0, 0, sw, sh };
+    SDL_Rect dest_pos = { pad_x, pad_y, rw, rh };
+    SDL_BlitScaled(source, &cover_rect, dest, &dest_pos);
+
+    // fill remaining rects
+    if (dest_wider)
+    {
+        SDL_Rect left = { 0, 0, pad_x, h };
+        SDL_FillRect(dest, &left, SDL_MapRGB(dest->format, 0, 0, 0));
+
+        SDL_Rect right = { w - pad_x, 0, pad_x, h };
+        SDL_FillRect(dest, &right, SDL_MapRGB(dest->format, 0, 0, 0));
+    }
+    else
+    {
+        SDL_Rect top = { 0, 0, w, pad_y };
+        SDL_FillRect(dest, &top, SDL_MapRGB(dest->format, 0, 0, 0));
+
+        SDL_Rect bottom = { 0, h - pad_y, w, pad_y };
+        SDL_FillRect(dest, &bottom, SDL_MapRGB(dest->format, 0, 0, 0));
+    }
+}
+
+void draw_cover( std::string rel_song_dir_path
+               , std::string title
+               , std::string artist
+               , std::string album
+               , TTF_Font * font
+               , SDL_Surface * surface
+               , SDL_Window * window
+               )
+{
+    std::string const abs_cover_path = cover_abs_path(rel_song_dir_path);
 
     SDL_Surface * cover = 0;
-    for (auto & name : names)
+    for (auto const & name : names)
     {
-        for (auto & ext : exts)
+        for (auto const & ext : exts)
         {
             std::string cover_path = abs_cover_path + name + "." + ext;
             cover = IMG_Load(cover_path.c_str());
@@ -87,43 +134,8 @@ void draw_cover( std::string rel_song_dir_path
                 // }
 
                 // draw cover while retaining image ratio
-                int const w = surface->w;
-                int const h = surface->h;
-                int const cw = cover->w;
-                int const ch = cover->h;
-
-                double const surface_ratio = static_cast<double>(w) / static_cast<double>(h);
-                double const cover_ratio = static_cast<double>(cw) / static_cast<double>(ch);
-
-                bool const surface_wider = surface_ratio >= cover_ratio;
-
-                int const rw = surface_wider ? cover_ratio * h : w;
-                int const rh = surface_wider ? h : (1 / cover_ratio) * w;
-
-                int const pad_x = (w - rw) / 2;
-                int const pad_y = (h - rh) / 2;
-
-                SDL_Rect cover_rect = { 0, 0, cw, ch };
-                SDL_Rect screen_pos = { pad_x, pad_y, rw, rh };
-                SDL_BlitScaled(cover, &cover_rect, surface, &screen_pos);
-
-                // fill remaining rects
-                if (surface_wider)
-                {
-                    SDL_Rect left = { 0, 0, pad_x, h };
-                    SDL_FillRect(surface, &left, SDL_MapRGB(surface->format, 0, 0, 0));
-
-                    SDL_Rect right = { w - pad_x, 0, pad_x, h };
-                    SDL_FillRect(surface, &right, SDL_MapRGB(surface->format, 0, 0, 0));
-                }
-                else
-                {
-                    SDL_Rect top = { 0, 0, w, pad_y };
-                    SDL_FillRect(surface, &top, SDL_MapRGB(surface->format, 0, 0, 0));
-
-                    SDL_Rect bottom = { 0, h - pad_y, w, pad_y };
-                    SDL_FillRect(surface, &bottom, SDL_MapRGB(surface->format, 0, 0, 0));
-                }
+                SDL_Rect surface_rect = { 0, 0, surface->w, surface->h };
+                blit_preserve_ar(cover, surface, &surface_rect);
 
                 goto exit;
             }
