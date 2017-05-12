@@ -49,7 +49,7 @@ void show_rect(SDL_Rect const & r)
     std::cout << r.x << " " << r.y << " on " << r.w << "x" << r.h << std::endl;
 }
 
-std::string cover_abs_path(std::string rel_song_dir_path)
+std::string absolute_cover_path(std::string rel_song_dir_path)
 {
     // try to detect, whether we need to look for the album cover in the super directory
     std::size_t const super_dir_sep_pos = rel_song_dir_path.find_last_of(PATH_SEP, rel_song_dir_path.size() - 2);
@@ -72,7 +72,7 @@ std::string cover_abs_path(std::string rel_song_dir_path)
 }
 
 // blit a surface to another surface while preserving aspect ratio
-void blit_preserve_ar(SDL_Surface * source, SDL_Surface * dest, SDL_Rect * destrect)
+void blit_preserve_ar(SDL_Surface * source, SDL_Surface * dest, SDL_Rect const * destrect)
 {
     int const w = destrect->w;
     int const h = destrect->h;
@@ -145,7 +145,7 @@ void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, TTF_Font * fo
 
 SDL_Surface * load_cover(std::string rel_song_dir_path)
 {
-    std::string const abs_cover_dir = basename(cover_abs_path(rel_song_dir_path));
+    std::string const abs_cover_dir = absolute_cover_path(basename(rel_song_dir_path));
     SDL_Surface * cover;
     for (auto const & name : names)
     {
@@ -184,6 +184,7 @@ struct gui_event_info
     {}
 
     // TODO use enum
+    // add a draw event that will only draw
     bool mouse_event;
 
     int x;
@@ -353,7 +354,7 @@ void handle_action(action a, mpd_control & mpdc, unsigned int volume_step)
     }
 }
 
-enum class menu
+enum class view_type
 {
     COVER_SWIPE,
     SONG_SEARCH,
@@ -451,7 +452,8 @@ int main(int argc, char * argv[])
     // loop state
     std::string current_song_path;
     bool random;
-    menu menu;
+    view_type current_view = view_type::COVER_SWIPE;
+    bool view_dirty = false;
 
     // TODO check for error?
     uint32_t const change_event_type = SDL_RegisterEvents(1);
@@ -464,6 +466,7 @@ int main(int argc, char * argv[])
         [&](bool value)
         {
             push_change_event(change_event_type, user_event::RANDOM_CHANGED, random, value);
+            std::cout << value << std::endl;
         }
     );
 
@@ -489,9 +492,10 @@ int main(int argc, char * argv[])
             {
                 apply_sdl_event(ev, gei);
 
-                std::array<std::function<void()>, 6> global_button_functions = { [&](){mpdc.toggle_pause();}
-                                                                               , [&](){mpdc.set_random(!random);}
-                                                                               , [](){}
+                // global buttons
+                std::array<std::function<void()>, 6> global_button_functions = { [&](){ current_view = static_cast<view_type>((static_cast<int>(current_view) + 1) % 3); view_dirty = true; }
+                                                                               , [&](){ mpdc.toggle_pause(); }
+                                                                               , [&](){ mpdc.set_random(!random); }
                                                                                , [](){}
                                                                                , [](){}
                                                                                , [](){}
@@ -511,31 +515,55 @@ int main(int argc, char * argv[])
                     SDL_UpdateWindowSurfaceRects(window, &button_rect, 1);
                 }
 
-                action a = swipe_area({40, 0, screen->w - 40, screen->h}, gei);
-                // redraw cover if it is a new one
-                if (ev.type == SDL_USEREVENT && static_cast<user_event>(ev.user.code) == user_event::TITLE_CHANGED)
-                {
-                    SDL_Surface * cover_surface = load_cover(current_song_path);
-                    SDL_Rect brect = {40, 0, screen->w - 40, screen->h};
-                    if (cover_surface != nullptr)
-                    {
-                        blit_preserve_ar(cover_surface, screen, &brect);
-                        SDL_FreeSurface(cover_surface);
-                    }
-                    else
-                    {
-                        draw_cover_replacement( screen
-                                            , brect
-                                            , font
-                                            , mpdc.get_current_title().get()
-                                            , mpdc.get_current_artist().get()
-                                            , mpdc.get_current_album().get()
-                                            );
-                    }
-                    SDL_UpdateWindowSurfaceRects(window, &brect, 1);
-                }
+                SDL_Rect const view_rect = {40, 0, screen->w - 40, screen->h};
 
-                handle_action(a, mpdc, 5);
+                // view area
+                if (current_view == view_type::COVER_SWIPE)
+                {
+                    action a = swipe_area(view_rect, gei);
+                    // redraw cover if it is a new one or if marked dirty
+                    if ((ev.type == SDL_USEREVENT && static_cast<user_event>(ev.user.code) == user_event::TITLE_CHANGED) || view_dirty)
+                    {
+                        SDL_Surface * cover_surface = load_cover(current_song_path);
+                        if (cover_surface != nullptr)
+                        {
+                            blit_preserve_ar(cover_surface, screen, &view_rect);
+                            SDL_FreeSurface(cover_surface);
+                        }
+                        else
+                        {
+                            draw_cover_replacement( screen
+                                                  , view_rect
+                                                  , font
+                                                  , mpdc.get_current_title().get()
+                                                  , mpdc.get_current_artist().get()
+                                                  , mpdc.get_current_album().get()
+                                                  );
+                        }
+                        SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
+                        view_dirty = false;
+                    }
+                    handle_action(a, mpdc, 5);
+                }
+                else if (current_view == view_type::SONG_SEARCH)
+                {
+                    SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 200, 20, 40));
+                    SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
+                }
+                else if (current_view == view_type::SHUTDOWN)
+                {
+                    SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
+
+                    if (button( {80, 60, 200, 100}
+                              , [](SDL_Surface * s, SDL_Rect const & rect) { SDL_FillRect(s, &rect, SDL_MapRGB(s->format, 0, 0, 0)); }
+                              , [](SDL_Surface * s, SDL_Rect const & rect) { SDL_FillRect(s, &rect, SDL_MapRGB(s->format, 255, 255, 255)); }
+                              , gei
+                              , screen
+                              )
+                    )
+                        std::cout << "shutting down" << std::endl;
+                    SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
+                }
             }
         }
         {
