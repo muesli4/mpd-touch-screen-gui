@@ -10,7 +10,7 @@
 
 struct mpd_control
 {
-    mpd_control(std::function<void(std::string)> new_song_path_cb);
+    mpd_control(std::function<void(std::string)> new_song_path_cb, std::function<void(bool)> random_cb);
     ~mpd_control();
 
     void run();
@@ -21,6 +21,10 @@ struct mpd_control
     void dec_volume(unsigned int amount);
     void next_song();
     void prev_song();
+
+    void set_random(bool value);
+
+    std::future<bool> get_random();
 
     std::future<std::string> get_current_title();
     std::future<std::string> get_current_artist();
@@ -39,6 +43,7 @@ struct mpd_control
     bool _run;
 
     std::function<void(std::string)> _new_song_path_cb;
+    std::function<void(bool)> _random_cb;
 
     std::mutex _external_tasks_mutex;
     std::deque<std::function<void(mpd_connection *)>> _external_tasks;

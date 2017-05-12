@@ -6,10 +6,11 @@
 #include "util.hpp"
 
 
-mpd_control::mpd_control(std::function<void(std::string)> new_song_path_cb)
+mpd_control::mpd_control(std::function<void(std::string)> new_song_path_cb, std::function<void(bool)> random_cb)
     : _c(mpd_connection_new(0, 0, 0))
     , _run(true)
     , _new_song_path_cb(new_song_path_cb)
+    , _random_cb(random_cb)
 {
 }
 
@@ -31,9 +32,9 @@ void mpd_control::run()
         // TODO use condition variable here!
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-        if (mpd_run_noidle(_c) != 0)
+        enum mpd_idle idle_event = mpd_run_noidle(_c);
+        if (idle_event & MPD_IDLE_PLAYER)
         {
-
             mpd_song * song = mpd_run_current_song(_c);
 
             if (song != 0)
@@ -48,6 +49,12 @@ void mpd_control::run()
                 }
             }
             last_song = song;
+        }
+        if (idle_event & MPD_IDLE_OPTIONS)
+        {
+            mpd_status * s = mpd_run_status(_c);
+            _random_cb(mpd_status_get_random(s));
+            mpd_status_free(s);
         }
         {
             scoped_lock lock(_external_tasks_mutex);
@@ -67,9 +74,6 @@ void mpd_control::run()
                 _external_song_queries.pop_front();
             }
         }
-
-
-
     }
     mpd_song_free(last_song);
 }
@@ -112,6 +116,31 @@ void mpd_control::next_song()
 void mpd_control::prev_song()
 {
     add_external_task([](mpd_connection * c){ mpd_run_previous(c); });
+}
+
+void mpd_control::set_random(bool value)
+{
+    add_external_task([value](mpd_connection * c) { mpd_run_random(c, value); });
+}
+
+std::future<bool> mpd_control::get_random()
+{
+    typedef std::promise<bool> promise_type;
+    // TODO make_unique
+    std::shared_ptr<promise_type> promise_ptr = std::make_shared<promise_type>();
+
+    {
+        scoped_lock lock(_external_tasks_mutex);
+        _external_tasks.push_back([promise_ptr](mpd_connection * c)
+        {
+            mpd_status * s = mpd_run_status(c);
+            promise_ptr->set_value(mpd_status_get_random(s));
+            mpd_status_free(s);
+        }
+        );
+    }
+
+    return promise_ptr->get_future();
 }
 
 std::future<std::string> mpd_control::get_current_title()

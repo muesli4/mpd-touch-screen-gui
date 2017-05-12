@@ -117,7 +117,7 @@ void blit_preserve_ar(SDL_Surface * source, SDL_Surface * dest, SDL_Rect * destr
 
 void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, TTF_Font * font, std::string title, std::string artist, std::string album)
 {
-    SDL_FillRect(surface, 0, SDL_MapRGB(surface->format, 0, 0, 0));
+    SDL_FillRect(surface, &brect, SDL_MapRGB(surface->format, 0, 0, 0));
 
     SDL_Color font_color = { 255, 255, 255, 255 };
 
@@ -129,13 +129,13 @@ void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, TTF_Font * fo
     {
         SDL_Surface * text_surface =
             TTF_RenderUTF8_Blended( font
-                                    , line.c_str()
-                                    , font_color
-                                    );
+                                  , line.c_str()
+                                  , font_color
+                                  );
 
         if (text_surface != 0)
         {
-            SDL_Rect r = { 20, y_offset, text_surface->w, text_surface->h };
+            SDL_Rect r = { brect.x + 20, brect.y + y_offset, text_surface->w, text_surface->h };
             SDL_BlitSurface(text_surface, 0, surface, &r);
             SDL_FreeSurface(text_surface);
             y_offset += text_surface->h + 10;
@@ -145,14 +145,15 @@ void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, TTF_Font * fo
 
 SDL_Surface * load_cover(std::string rel_song_dir_path)
 {
-    std::string const abs_cover_path = cover_abs_path(rel_song_dir_path);
-
+    std::string const abs_cover_dir = basename(cover_abs_path(rel_song_dir_path));
+    SDL_Surface * cover;
     for (auto const & name : names)
     {
         for (auto const & ext : exts)
         {
-            std::string cover_path = abs_cover_path + name + "." + ext;
-            return IMG_Load(cover_path.c_str());
+            std::string cover_path = abs_cover_dir + name + "." + ext;
+            cover = IMG_Load(cover_path.c_str());
+            if (cover) return cover;
         }
     }
 
@@ -176,13 +177,20 @@ struct song
 
 struct gui_event_info
 {
+    gui_event_info()
+        : mouse_event(false)
+        , pressed(false)
+        , released(false)
+    {}
+
+    // TODO use enum
     bool mouse_event;
 
     int x;
     int y;
 
     bool pressed;
-    // left mouse button was pressed before
+    // left mouse button was pressed before and then released
     bool released;
 
     int last_x;
@@ -198,9 +206,9 @@ struct gui_event_info
     int ydiff;
 };
 
+// TODO add as method to class
 void apply_sdl_event(SDL_Event & e, gui_event_info & gei)
 {
-
     if (e.type == SDL_MOUSEBUTTONDOWN)
     {
         if (!gei.pressed)
@@ -212,7 +220,6 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei)
         }
         gei.mouse_event = true;
         gei.valid_swipe = false;
-        std::cout << "down" << std::endl;
     }
     else if (e.type == SDL_MOUSEBUTTONUP)
     {
@@ -232,11 +239,9 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei)
         gei.valid_swipe = gei.abs_xdiff > SWIPE_THRESHOLD_LOW_X || gei.abs_ydiff > SWIPE_THRESHOLD_LOW_Y;
         if (gei.valid_swipe)
             gei.last_swipe_time_point = std::chrono::steady_clock::now();
-        std::cout << "up" << std::endl;
     }
     else
     {
-        std::cout << "other" << std::endl;
         gei.mouse_event = false;
     }
 }
@@ -253,23 +258,19 @@ bool pressed_and_let_go_in(SDL_Rect const & r, gui_event_info const & gei)
                                         && gei.released;
 }
 
-bool button( SDL_Rect const & box
-           , SDL_Surface * isurf
-           , SDL_Surface * psurf
+bool button( SDL_Rect box
+           , std::function<void(SDL_Surface *, SDL_Rect const &)> draw_idle
+           , std::function<void(SDL_Surface *, SDL_Rect const &)> draw_pressed
            , gui_event_info const & gei
            , SDL_Surface * screen
            )
 {
-    bool pressed = pressed_and_let_go_in(box, gei);
+    bool activated = pressed_and_let_go_in(box, gei);
 
-    SDL_Surface * surf = pressed ? psurf : isurf;
+    (within_rect(gei.x, gei.y, box) && gei.pressed ? draw_pressed : draw_idle)(screen, box);
 
-    // use LowerBlit ?
-    SDL_BlitSurface(surf, nullptr, screen, const_cast<SDL_Rect *>(&box));
-
-    return pressed;
+    return gei.mouse_event && activated;
 }
-
 
 // TODO better name
 enum class action
@@ -284,13 +285,11 @@ enum class action
 
 action swipe_area(SDL_Rect const & box, gui_event_info const & gei)
 {
-    if (gei.mouse_event && within_rect(gei.x, gei.y, box) && gei.released)
+    if (gei.mouse_event && within_rect(gei.last_x, gei.last_y, box) && gei.released)
     {
-        std::cout << "recognized press" << std::endl;
         // swipe detection
         if (gei.valid_swipe)
         {
-            std::cout << "recognized valid swipe with xdiff = " << gei.xdiff << ", ydiff = " << gei.ydiff << std::endl;
             // y is volume
             if (gei.abs_ydiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= gei.abs_xdiff)
             {
@@ -330,6 +329,61 @@ action swipe_area(SDL_Rect const & box, gui_event_info const & gei)
     return action::NONE;
 }
 
+void handle_action(action a, mpd_control & mpdc, unsigned int volume_step)
+{
+    switch (a)
+    {
+        case action::INC_VOLUME:
+            mpdc.inc_volume(volume_step);
+            break;
+        case action::DEC_VOLUME:
+            mpdc.dec_volume(volume_step);
+            break;
+        case action::NEXT_SONG:
+            mpdc.next_song();
+            break;
+        case action::PREV_SONG:
+            mpdc.prev_song();
+            break;
+        case action::TOGGLE_PAUSE:
+            mpdc.toggle_pause();
+            break;
+        default:
+            break;
+    }
+}
+
+enum class menu
+{
+    COVER_SWIPE,
+    SONG_SEARCH,
+    SHUTDOWN
+};
+
+enum class user_event
+{
+    RANDOM_CHANGED,
+    TITLE_CHANGED
+};
+
+void push_user_event(uint32_t event_type, user_event ue)
+{
+    SDL_Event e;
+    SDL_memset(&e, 0, sizeof(e));
+    e.type = event_type;
+    e.user.code = (int)ue;
+    SDL_PushEvent(&e);
+}
+
+template <typename T> void push_change_event(uint32_t event_type, user_event ue, T & old_val, T const & new_val)
+{
+    if (old_val != new_val)
+    {
+        old_val = new_val;
+        push_user_event(event_type, ue);
+    }
+}
+
 int main(int argc, char * argv[])
 {
 
@@ -340,19 +394,6 @@ int main(int argc, char * argv[])
 
     // allows swipes with multiple lines, as long as the time between them is below this TODO not implemented
     //unsigned int const TOUCH_DEBOUNCE_TIME_MS_THRESHOLD_MAX = 200;
-
-    std::mutex new_song_mailbox_mutex;
-    std::queue<std::string> new_song_mailbox;
-
-    mpd_control mpdc(
-        [&](std::string const & uri)
-        {
-            scoped_lock lock(new_song_mailbox_mutex);
-            new_song_mailbox.push(uri);
-        }
-    );
-
-    std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
     std::atexit(SDL_Quit);
@@ -407,20 +448,34 @@ int main(int argc, char * argv[])
 
     SDL_Surface * screen = SDL_GetWindowSurface(window);
 
+    // loop state
+    std::string current_song_path;
+    bool random;
+    menu menu;
+
+    // TODO check for error?
+    uint32_t const change_event_type = SDL_RegisterEvents(1);
+
+    mpd_control mpdc(
+        [&](std::string const & uri)
+        {
+            push_change_event(change_event_type, user_event::TITLE_CHANGED, current_song_path, uri);
+        },
+        [&](bool value)
+        {
+            push_change_event(change_event_type, user_event::RANDOM_CHANGED, random, value);
+        }
+    );
+
+    std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
+
     bool run = true;
-    std::string last_song_dir_path;
     while (run)
     {
 
         SDL_Event ev;
 
-
-        //std::chrono::steady_clock::time_point down_time_point = std::chrono::steady_clock::now();
-
         gui_event_info gei;
-        gei.pressed = false;
-        gei.released = false;
-        gei.mouse_event = false;
 
         while (SDL_PollEvent(&ev) == 1)
         {
@@ -429,73 +484,61 @@ int main(int argc, char * argv[])
                 std::cout << "Requested quit" << std::endl;
                 run = false;
             }
-            else if (ev.type != SDL_MOUSEMOTION)
+            // most of the events are not required for a standalone fullscreen application
+            else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP || ev.type == SDL_USEREVENT)
             {
                 apply_sdl_event(ev, gei);
 
-
-
-                action a = swipe_area({20, 0, screen->w - 20, screen->h}, gei);
-
-                std::cout << (int)a << std::endl;
-                switch (a)
+                std::array<std::function<void()>, 6> global_button_functions = { [&](){mpdc.toggle_pause();}
+                                                                               , [&](){mpdc.set_random(!random);}
+                                                                               , [](){}
+                                                                               , [](){}
+                                                                               , [](){}
+                                                                               , [](){}
+                                                                               };
+                for (int i = 0; i < 6; i++)
                 {
-                    case action::INC_VOLUME:
-                        mpdc.inc_volume(5);
-                        break;
-                    case action::DEC_VOLUME:
-                        mpdc.dec_volume(5);
-                        break;
-                    case action::NEXT_SONG:
-                        mpdc.next_song();
-                        break;
-                    case action::PREV_SONG:
-                        mpdc.prev_song();
-                        break;
-                    case action::TOGGLE_PAUSE:
-                        mpdc.toggle_pause();
-                        break;
-                    default:
-                        break;
+                    if (button( {0, i * 40, 40, 40}
+                              , [](SDL_Surface * s, SDL_Rect const & rect) { SDL_FillRect(s, &rect, SDL_MapRGB(s->format, 0, 0, 0)); }
+                              , [](SDL_Surface * s, SDL_Rect const & rect) { SDL_FillRect(s, &rect, SDL_MapRGB(s->format, 255, 255, 255)); }
+                              , gei
+                              , screen
+                              )
+                    )
+                        global_button_functions[i]();
+
+                    SDL_Rect button_rect = {0, i * 40, 40, 40};
+                    SDL_UpdateWindowSurfaceRects(window, &button_rect, 1);
                 }
-            }
-        }
-        {
-            std::unique_lock<std::mutex> lock(new_song_mailbox_mutex);
 
-            if (!new_song_mailbox.empty())
-            {
-                std::string new_song_path = new_song_mailbox.front();
-                new_song_mailbox.pop();
-
-                lock.unlock();
-
-                std::string new_song_dir_path = basename(new_song_path);
-
+                action a = swipe_area({40, 0, screen->w - 40, screen->h}, gei);
                 // redraw cover if it is a new one
-                if (new_song_dir_path != last_song_dir_path)
+                if (ev.type == SDL_USEREVENT && static_cast<user_event>(ev.user.code) == user_event::TITLE_CHANGED)
                 {
-                    SDL_Surface * cover_surface = load_cover(new_song_dir_path);
-                    SDL_Rect brect = {20, 0, screen->w - 20, screen->h};
+                    SDL_Surface * cover_surface = load_cover(current_song_path);
+                    SDL_Rect brect = {40, 0, screen->w - 40, screen->h};
                     if (cover_surface != nullptr)
                     {
                         blit_preserve_ar(cover_surface, screen, &brect);
+                        SDL_FreeSurface(cover_surface);
                     }
                     else
                     {
                         draw_cover_replacement( screen
-                                              , brect
-                                              , font
-                                              , mpdc.get_current_title().get()
-                                              , mpdc.get_current_artist().get()
-                                              , mpdc.get_current_album().get()
-                                              );
+                                            , brect
+                                            , font
+                                            , mpdc.get_current_title().get()
+                                            , mpdc.get_current_artist().get()
+                                            , mpdc.get_current_album().get()
+                                            );
                     }
-                    SDL_UpdateWindowSurface(window);
-
-                    last_song_dir_path.swap(new_song_dir_path);
+                    SDL_UpdateWindowSurfaceRects(window, &brect, 1);
                 }
+
+                handle_action(a, mpdc, 5);
             }
+        }
+        {
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
