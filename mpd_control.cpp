@@ -27,7 +27,7 @@ void mpd_control::run()
 
     while (_run)
     {
-        mpd_send_idle_mask(_c, MPD_IDLE_PLAYER);
+        mpd_send_idle_mask(_c, static_cast<mpd_idle>(MPD_IDLE_PLAYER | MPD_IDLE_OPTIONS));
 
         // TODO use condition variable here!
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
