@@ -555,7 +555,12 @@ int main(int argc, char * argv[])
                     run = false;
                 }
                 // most of the events are not required for a standalone fullscreen application
-                else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP || ev.type == SDL_USEREVENT)
+                else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP
+                                                        || ev.type == SDL_USEREVENT
+#ifndef __arm__
+                                                        || ev.type == SDL_WINDOWEVENT
+#endif
+                        )
                 {
                     apply_sdl_event(ev, gei);
 
@@ -564,20 +569,15 @@ int main(int argc, char * argv[])
                         { [&](){ current_view = static_cast<view_type>((static_cast<int>(current_view) + 1) % 3); view_dirty = true; }
                         , [&](){ mpdc.toggle_pause(); }
                         , [&](){ mpdc.set_random(!random); }
-                        , [](){}
-                        , [](){}
-                        , [](){}
+                        , [](){ std::cout << "unused a" << std::endl; }
+                        , [](){ std::cout << "unused b" << std::endl; }
+                        , [](){ std::cout << "unused c" << std::endl; }
                         };
                     std::array<char const * const, 6> global_button_labels { "M", "P", "R", "-", "-", "-" };
                     for (int i = 0; i < 6; i++)
                     {
                         SDL_Rect button_rect = {0, i * 40, 40, 40};
-                        if (text_button( button_rect
-                                       , global_button_labels[i]
-                                       , fa
-                                       , gc
-                                       )
-                            )
+                        if (text_button(button_rect, global_button_labels[i], fa, gc))
                             global_button_functions[i]();
                         SDL_UpdateWindowSurfaceRects(window, &button_rect, 1);
                     }
@@ -621,14 +621,7 @@ int main(int argc, char * argv[])
                     {
                         SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
 
-                        if (text_button( {80, 60, 200, 100}
-                                       , "Shutdown"
-                                       , fa
-                                //, [](SDL_Surface * s, SDL_Rect const & rect) { SDL_FillRect(s, &rect, SDL_MapRGB(s->format, 0, 0, 0)); }
-                                //, [](SDL_Surface * s, SDL_Rect const & rect) { SDL_FillRect(s, &rect, SDL_MapRGB(s->format, 255, 255, 255)); }
-                                , gc
-                                )
-                        )
+                        if (text_button( {80, 60, 200, 100}, "Shutdown", fa, gc))
                             std::cout << "shutting down" << std::endl;
                         SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
                     }
