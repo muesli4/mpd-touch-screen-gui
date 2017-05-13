@@ -24,15 +24,15 @@ struct mpd_control
 
     void set_random(bool value);
 
-    std::future<bool> get_random();
+    bool get_random();
 
-    std::future<std::string> get_current_title();
-    std::future<std::string> get_current_artist();
-    std::future<std::string> get_current_album();
+    std::string get_current_title();
+    std::string get_current_artist();
+    std::string get_current_album();
 
     private:
 
-    std::future<std::string> get_current_tag(enum mpd_tag_type type);
+    std::string get_current_tag(enum mpd_tag_type type);
 
     void add_external_task(std::function<void(mpd_connection *)> t);
 

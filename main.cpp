@@ -7,7 +7,6 @@
 #include <array>
 
 #include <iterator>
-#include <algorithm>
 
 #include <thread>
 #include <mutex>
@@ -26,6 +25,8 @@
 // TODO when screen is darkened a touch event activates it
 // TODO when hardware rendering is available replace blits with texture copy of the renderer
 //      (for software it doesn't make sense, since the renderer will just make a copy of the surface to generate a texture)
+
+// TODO font rendering that breaks lines
 
 char const * const base_dir =
 #ifndef __arm__
@@ -55,28 +56,6 @@ std::array<char const * const, 3> const cover_names = { "front", "cover", "back"
 void show_rect(SDL_Rect const & r)
 {
     std::cout << r.x << " " << r.y << " on " << r.w << "x" << r.h << std::endl;
-}
-
-std::string absolute_cover_path(std::string rel_song_dir_path)
-{
-    // try to detect, whether we need to look for the album cover in the super directory
-    std::size_t const super_dir_sep_pos = rel_song_dir_path.find_last_of(PATH_SEP, rel_song_dir_path.size() - 2);
-
-    bool has_discnumber = false;
-    if (super_dir_sep_pos != std::string::npos)
-    {
-        std::string const super_dir =
-            rel_song_dir_path.substr(super_dir_sep_pos + 1, rel_song_dir_path.size() - 2 - super_dir_sep_pos);
-
-        if (super_dir.find("CD ") == 0
-            && std::all_of(std::next(super_dir.begin(), 3), super_dir.end(), ::isdigit)
-           )
-        {
-            has_discnumber = true;
-        }
-    }
-
-    return std::string(base_dir) + (has_discnumber ? rel_song_dir_path.substr(0, super_dir_sep_pos + 1) : rel_song_dir_path);
 }
 
 // blit a surface to another surface while preserving aspect ratio
@@ -153,7 +132,7 @@ void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, TTF_Font * fo
 
 SDL_Surface * load_cover(std::string rel_song_dir_path)
 {
-    std::string const abs_cover_dir = absolute_cover_path(basename(rel_song_dir_path));
+    std::string const abs_cover_dir = absolute_cover_path(base_dir, basename(rel_song_dir_path));
     SDL_Surface * cover;
     for (auto const & name : cover_names)
     {
@@ -338,7 +317,6 @@ bool image_button( SDL_Rect box
     SDL_BlitSurface(pressed_in(box, gc.gei) ? pressed_surf : idle_surf, nullptr, gc.target_surface, &box);
     return is_button_active(box, gc.gei);
 }
-
 
 // TODO better name
 enum class action
@@ -600,12 +578,12 @@ int main(int argc, char * argv[])
                             else
                             {
                                 draw_cover_replacement( screen
-                                                    , view_rect
-                                                    , font
-                                                    , mpdc.get_current_title().get()
-                                                    , mpdc.get_current_artist().get()
-                                                    , mpdc.get_current_album().get()
-                                                    );
+                                                      , view_rect
+                                                      , font
+                                                      , mpdc.get_current_title()
+                                                      , mpdc.get_current_artist()
+                                                      , mpdc.get_current_album()
+                                                      );
                             }
                             SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
                             view_dirty = false;

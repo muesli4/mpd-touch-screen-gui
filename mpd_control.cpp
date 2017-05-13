@@ -123,7 +123,7 @@ void mpd_control::set_random(bool value)
     add_external_task([value](mpd_connection * c) { mpd_run_random(c, value); });
 }
 
-std::future<bool> mpd_control::get_random()
+bool mpd_control::get_random()
 {
     typedef std::promise<bool> promise_type;
     // TODO make_unique
@@ -136,29 +136,28 @@ std::future<bool> mpd_control::get_random()
             mpd_status * s = mpd_run_status(c);
             promise_ptr->set_value(mpd_status_get_random(s));
             mpd_status_free(s);
-        }
-        );
+        });
     }
 
-    return promise_ptr->get_future();
+    return promise_ptr->get_future().get();
 }
 
-std::future<std::string> mpd_control::get_current_title()
+std::string mpd_control::get_current_title()
 {
     return get_current_tag(MPD_TAG_TITLE);
 }
 
-std::future<std::string> mpd_control::get_current_artist()
+std::string mpd_control::get_current_artist()
 {
     return get_current_tag(MPD_TAG_ARTIST);
 }
 
-std::future<std::string> mpd_control::get_current_album()
+std::string mpd_control::get_current_album()
 {
     return get_current_tag(MPD_TAG_ALBUM);
 }
 
-std::future<std::string> mpd_control::get_current_tag(enum mpd_tag_type type)
+std::string mpd_control::get_current_tag(enum mpd_tag_type type)
 {
     typedef std::promise<std::string> promise_type;
     // TODO make_unique
@@ -174,7 +173,7 @@ std::future<std::string> mpd_control::get_current_tag(enum mpd_tag_type type)
         );
     }
 
-    return promise_ptr->get_future();
+    return promise_ptr->get_future().get();
 }
 
 

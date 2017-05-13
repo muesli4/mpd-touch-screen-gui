@@ -14,4 +14,6 @@ typedef std::lock_guard<std::mutex> scoped_lock;
 
 std::string basename(std::string path);
 
+std::string absolute_cover_path(std::string base_dir, std::string rel_song_dir_path);
+
 #endif
