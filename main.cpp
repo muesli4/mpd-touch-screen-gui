@@ -26,7 +26,8 @@
 // TODO when hardware rendering is available replace blits with texture copy of the renderer
 //      (for software it doesn't make sense, since the renderer will just make a copy of the surface to generate a texture)
 
-// TODO font rendering that breaks lines
+// TODO font rendering that breaks lines, makes caching harder (maybe cache words?)
+// TODO move constants into config
 
 char const * const base_dir =
 #ifndef __arm__
@@ -44,7 +45,7 @@ unsigned int const SWIPE_THRESHOLD_LOW_Y = SWIPE_THRESHOLD_LOW_X;
 double const DIR_UNAMBIG_FACTOR_THRESHOLD = 0.3;
 
 // the time to wait after a swipe, before allowing touch events
-unsigned int SWIPE_WAIT_DEBOUNCE_MS_THRESHOLD = 400;
+unsigned int const SWIPE_WAIT_DEBOUNCE_MS_THRESHOLD = 400;
 
 // determines how long a swipe is still recognized as a touch
 unsigned int const TOUCH_DISTANCE_THRESHOLD_HIGH = 10;
@@ -162,6 +163,10 @@ struct song
     std::string path;
 };
 
+// ----------------------------------------------------------------------------
+// Drawing simple absolutely placed gui elements in an event loop.
+//
+
 struct gui_event_info
 {
     gui_event_info()
@@ -224,6 +229,16 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei)
     {
         gei.mouse_event = false;
     }
+}
+
+bool swipe_is_press(gui_event_info const & gei)
+{
+    // a touch display is inaccurate, a press with a finger might be interpreted as swipe
+    return gei.abs_xdiff < TOUCH_DISTANCE_THRESHOLD_HIGH
+           && gei.abs_ydiff < TOUCH_DISTANCE_THRESHOLD_HIGH
+           && std::chrono::duration_cast<std::chrono::milliseconds>(
+                  gei.up_time_point - gei.last_swipe_time_point
+              ).count() > SWIPE_WAIT_DEBOUNCE_MS_THRESHOLD;
 }
 
 bool within_rect(int x, int y, SDL_Rect const & r)
@@ -362,11 +377,7 @@ action swipe_area(SDL_Rect const & box, gui_event_info const & gei)
             }
         }
         // check if the finger didn't move a lot and whether we're not doing a swipe motion directly before
-        else if (    gei.abs_xdiff < TOUCH_DISTANCE_THRESHOLD_HIGH
-                  && gei.abs_ydiff < TOUCH_DISTANCE_THRESHOLD_HIGH
-                  && std::chrono::duration_cast<std::chrono::milliseconds>(gei.up_time_point - gei.last_swipe_time_point).count()
-                     > SWIPE_WAIT_DEBOUNCE_MS_THRESHOLD
-                )
+        else if (swipe_is_press(gei))
         {
             return action::TOGGLE_PAUSE;
         }
@@ -402,6 +413,7 @@ void handle_action(action a, mpd_control & mpdc, unsigned int volume_step)
 enum class view_type
 {
     COVER_SWIPE,
+    PLAYLIST,
     SONG_SEARCH,
     SHUTDOWN
 };
@@ -409,7 +421,7 @@ enum class view_type
 enum class user_event
 {
     RANDOM_CHANGED,
-    TITLE_CHANGED
+    SONG_CHANGED
 };
 
 void push_user_event(uint32_t event_type, user_event ue)
@@ -497,14 +509,18 @@ int main(int argc, char * argv[])
     bool random;
     view_type current_view = view_type::COVER_SWIPE;
     bool view_dirty = false;
+    unsigned int current_song_pos = 0;
+    std::vector<std::string> current_playlist;
 
     // TODO check for error?
     uint32_t const change_event_type = SDL_RegisterEvents(1);
 
     mpd_control mpdc(
-        [&](std::string const & uri)
+        [&](std::string const & uri, unsigned int pos)
         {
-            push_change_event(change_event_type, user_event::TITLE_CHANGED, current_song_path, uri);
+            push_user_event(change_event_type, user_event::SONG_CHANGED);
+            current_song_path = uri;
+            current_song_pos = pos;
         },
         [&](bool value)
         {
@@ -514,9 +530,11 @@ int main(int argc, char * argv[])
 
     std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
 
+    current_playlist = mpdc.get_current_playlist();
 
     {
         font_atlas fa(DEFAULT_FONT_PATH, 20);
+        font_atlas fa_small(DEFAULT_FONT_PATH, 15);
         gui_event_info gei;
         gui_context gc(gei, screen);
 
@@ -544,7 +562,7 @@ int main(int argc, char * argv[])
 
                     // global buttons
                     std::array<std::function<void()>, 6> global_button_functions 
-                        { [&](){ current_view = static_cast<view_type>((static_cast<int>(current_view) + 1) % 3); view_dirty = true; }
+                        { [&](){ current_view = static_cast<view_type>((static_cast<int>(current_view) + 1) % 4); view_dirty = true; }
                         , [&](){ mpdc.toggle_pause(); }
                         , [&](){ mpdc.set_random(!random); }
                         , [](){ std::cout << "unused a" << std::endl; }
@@ -567,7 +585,7 @@ int main(int argc, char * argv[])
                     {
                         action a = swipe_area(view_rect, gei);
                         // redraw cover if it is a new one or if marked dirty
-                        if ((ev.type == SDL_USEREVENT && static_cast<user_event>(ev.user.code) == user_event::TITLE_CHANGED) || view_dirty)
+                        if ((ev.type == SDL_USEREVENT && static_cast<user_event>(ev.user.code) == user_event::SONG_CHANGED) || view_dirty)
                         {
                             SDL_Surface * cover_surface = load_cover(current_song_path);
                             if (cover_surface != nullptr)
@@ -590,17 +608,35 @@ int main(int argc, char * argv[])
                         }
                         handle_action(a, mpdc, 5);
                     }
-                    else if (current_view == view_type::SONG_SEARCH)
+                    else
                     {
-                        SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 200, 20, 40));
-                        SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
-                    }
-                    else if (current_view == view_type::SHUTDOWN)
-                    {
-                        SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
+                        if (current_view == view_type::PLAYLIST)
+                        {
+                            SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 200, 200, 40));
 
-                        if (text_button( {80, 60, 200, 100}, "Shutdown", fa, gc))
-                            std::cout << "shutting down" << std::endl;
+                            for (std::size_t n = 0; n < std::min(static_cast<std::size_t>(10), current_playlist.size() - current_song_pos); n++)
+                            {
+                                SDL_Rect label_box {40, 2 + static_cast<int>(n) * 19, 280, 15};
+                                SDL_BlitSurface(fa_small.text(current_playlist[current_song_pos + n]), nullptr, screen, &label_box);
+                            }
+                        }
+                        else if (current_view == view_type::SONG_SEARCH)
+                        {
+                            SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 200, 20, 40));
+
+                            if (text_button({80, 60, 200, 100}, "List songs", fa, gc))
+                                for (auto & str : mpdc.get_current_playlist())
+                                {
+                                    std::cout << str << std::endl;
+                                }
+                        }
+                        else if (current_view == view_type::SHUTDOWN)
+                        {
+                            SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
+
+                            if (text_button( {80, 60, 200, 100}, "Shutdown", fa, gc))
+                                std::cout << "shutting down" << std::endl;
+                        }
                         SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
                     }
 

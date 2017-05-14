@@ -10,7 +10,7 @@
 
 struct mpd_control
 {
-    mpd_control(std::function<void(std::string)> new_song_path_cb, std::function<void(bool)> random_cb);
+    mpd_control(std::function<void(std::string, unsigned int)> new_song_cb, std::function<void(bool)> random_cb);
     ~mpd_control();
 
     void run();
@@ -30,6 +30,8 @@ struct mpd_control
     std::string get_current_artist();
     std::string get_current_album();
 
+    std::vector<std::string> get_current_playlist();
+
     private:
 
     std::string get_current_tag(enum mpd_tag_type type);
@@ -42,7 +44,7 @@ struct mpd_control
 
     bool _run;
 
-    std::function<void(std::string)> _new_song_path_cb;
+    std::function<void(std::string, unsigned int)> _new_song_cb;
     std::function<void(bool)> _random_cb;
 
     std::mutex _external_tasks_mutex;

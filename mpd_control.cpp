@@ -6,10 +6,10 @@
 #include "util.hpp"
 
 
-mpd_control::mpd_control(std::function<void(std::string)> new_song_path_cb, std::function<void(bool)> random_cb)
+mpd_control::mpd_control(std::function<void(std::string, unsigned int)> new_song_cb, std::function<void(bool)> random_cb)
     : _c(mpd_connection_new(0, 0, 0))
     , _run(true)
-    , _new_song_path_cb(new_song_path_cb)
+    , _new_song_cb(new_song_cb)
     , _random_cb(random_cb)
 {
 }
@@ -157,6 +157,43 @@ std::string mpd_control::get_current_album()
     return get_current_tag(MPD_TAG_ALBUM);
 }
 
+std::vector<std::string> mpd_control::get_current_playlist()
+{
+    typedef std::promise<std::vector<std::string>> promise_type;
+    // TODO make_unique
+    std::shared_ptr<promise_type> promise_ptr = std::make_shared<promise_type>();
+
+    {
+        scoped_lock lock(_external_tasks_mutex);
+        _external_tasks.push_back([promise_ptr](mpd_connection * c)
+        {
+            mpd_status * s = mpd_run_status(c);
+            std::vector<std::string> playlist;
+            playlist.reserve(mpd_status_get_queue_length(s));
+            mpd_status_get_queue_version(s);
+
+            mpd_send_list_queue_meta(c);
+
+            mpd_song * song;
+            while ((song = mpd_recv_song(c)) != nullptr)
+            {
+                playlist.push_back(
+                    string_from_ptr(mpd_song_get_tag(song, MPD_TAG_ARTIST, 0))
+                    + " - "
+                    + string_from_ptr(mpd_song_get_tag(song, MPD_TAG_TITLE, 0))
+                );
+                mpd_song_free(song);
+            }
+
+            promise_ptr->set_value(playlist);
+            mpd_status_free(s);
+        });
+    }
+
+    return promise_ptr->get_future().get();
+}
+
+
 std::string mpd_control::get_current_tag(enum mpd_tag_type type)
 {
     typedef std::promise<std::string> promise_type;
@@ -168,7 +205,7 @@ std::string mpd_control::get_current_tag(enum mpd_tag_type type)
         _external_song_queries.push_back([type, promise_ptr](mpd_connection * c, mpd_song * s)
         {
             char const * const cstr = mpd_song_get_tag(s, type, 0);
-            promise_ptr->set_value(std::string(cstr == 0 ? "" : cstr));
+            promise_ptr->set_value(string_from_ptr(cstr));
         }
         );
     }
@@ -185,5 +222,5 @@ void mpd_control::add_external_task(std::function<void(mpd_connection *)> t)
 
 void mpd_control::new_song_cb(mpd_song * s)
 {
-    _new_song_path_cb(mpd_song_get_uri(s));
+    _new_song_cb(mpd_song_get_uri(s), mpd_song_get_pos(s));
 }
