@@ -28,3 +28,8 @@ std::string absolute_cover_path(std::string base_dir, std::string rel_song_dir_p
 
     return std::string(base_dir) + (has_discnumber ? rel_song_dir_path.substr(0, super_dir_sep_pos + 1) : rel_song_dir_path);
 }
+
+std::string string_from_ptr(char const * const ptr)
+{
+    return ptr == 0 ? "" : ptr;
+}
