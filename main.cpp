@@ -444,7 +444,6 @@ template <typename T> void push_change_event(uint32_t event_type, user_event ue,
 
 int main(int argc, char * argv[])
 {
-
     // TODO move to config
     char const * const DEFAULT_FONT_PATH = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
 
@@ -616,7 +615,7 @@ int main(int argc, char * argv[])
 
                             for (std::size_t n = 0; n < std::min(static_cast<std::size_t>(10), current_playlist.size() - current_song_pos); n++)
                             {
-                                SDL_Rect label_box {40, 2 + static_cast<int>(n) * 19, 280, 15};
+                                SDL_Rect label_box {40, 2 + static_cast<int>(n) * 19, screen->w - 40, 15};
                                 SDL_BlitSurface(fa_small.text(current_playlist[current_song_pos + n]), nullptr, screen, &label_box);
                             }
                         }
