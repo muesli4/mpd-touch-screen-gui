@@ -21,6 +21,12 @@
 #include "util.hpp"
 #include "font_atlas.hpp"
 
+// test build to run on local machine
+#ifndef __arm__
+#define TEST_BUILD
+#endif
+
+
 // TODO inactive timer that darkens the screen after a minute or so
 // TODO when screen is darkened a touch event activates it
 // TODO when hardware rendering is available replace blits with texture copy of the renderer
@@ -30,7 +36,7 @@
 // TODO move constants into config
 
 char const * const base_dir =
-#ifndef __arm__
+#ifdef TEST_BUILD
     "/home/moritz/Musik/"
 #else
     "/mnt/music/library/"
@@ -418,6 +424,11 @@ enum class view_type
     SHUTDOWN
 };
 
+view_type cycle_view_type(view_type v)
+{
+    return static_cast<view_type>((static_cast<unsigned int>(v) + 1) % 4);
+}
+
 enum class user_event
 {
     RANDOM_CHANGED,
@@ -490,7 +501,7 @@ int main(int argc, char * argv[])
         ( "mpc-touch-lcd-gui"
         , SDL_WINDOWPOS_UNDEFINED
         , SDL_WINDOWPOS_UNDEFINED
-#ifndef __arm__
+#ifdef TEST_BUILD
         , 320
         , 240
         , 0
@@ -509,6 +520,7 @@ int main(int argc, char * argv[])
     view_type current_view = view_type::COVER_SWIPE;
     bool view_dirty = false;
     unsigned int current_song_pos = 0;
+    unsigned int playlist_view_pos = 0;
     std::vector<std::string> current_playlist;
 
     // TODO check for error?
@@ -544,7 +556,12 @@ int main(int argc, char * argv[])
 
             while (SDL_PollEvent(&ev) == 1)
             {
-                if (ev.type == SDL_QUIT)
+                if ( ev.type == SDL_QUIT
+#ifdef TEST_BUILD
+                     || ev.type == SDL_KEYDOWN
+#endif
+
+                   )
                 {
                     std::cout << "Requested quit" << std::endl;
                     run = false;
@@ -552,7 +569,7 @@ int main(int argc, char * argv[])
                 // most of the events are not required for a standalone fullscreen application
                 else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP
                                                         || ev.type == SDL_USEREVENT
-#ifndef __arm__
+#ifdef TEST_BUILD
                                                         || ev.type == SDL_WINDOWEVENT
 #endif
                         )
@@ -561,7 +578,7 @@ int main(int argc, char * argv[])
 
                     // global buttons
                     std::array<std::function<void()>, 6> global_button_functions 
-                        { [&](){ current_view = static_cast<view_type>((static_cast<int>(current_view) + 1) % 4); view_dirty = true; }
+                        { [&](){ current_view = cycle_view_type(current_view); view_dirty = true; }
                         , [&](){ mpdc.toggle_pause(); }
                         , [&](){ mpdc.set_random(!random); }
                         , [](){ std::cout << "unused a" << std::endl; }
@@ -613,28 +630,45 @@ int main(int argc, char * argv[])
                         {
                             SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 200, 200, 40));
 
-                            for (std::size_t n = 0; n < std::min(static_cast<std::size_t>(10), current_playlist.size() - current_song_pos); n++)
+                            int const y = 192 + 2;
+                            int const h = 38;
+                            int const w = 24 * (screen->w - 40) / 100;
+
+
+                            // 7 24 7 24 7 24 7
+                            if (text_button({40 + 7 * (screen->w - 40) / 100, y, w, h}, "Jump", fa, gc))
+                                playlist_view_pos = current_song_pos;
+                            if (text_button({40 + 38 * (screen->w - 40) / 100, y, w, h}, "Up", fa, gc))
+                                playlist_view_pos = (playlist_view_pos + 10) % current_playlist.size();
+                            if (text_button({40 + 69 * (screen->w - 40) / 100, y, w, h}, "Down", fa, gc))
+                                playlist_view_pos = (playlist_view_pos - 10) % current_playlist.size();
+
+                            for (std::size_t n = 0; n < std::min(static_cast<std::size_t>(10), current_playlist.size() - playlist_view_pos); n++)
                             {
-                                SDL_Rect label_box {40, 2 + static_cast<int>(n) * 19, screen->w - 40, 15};
-                                SDL_BlitSurface(fa_small.text(current_playlist[current_song_pos + n]), nullptr, screen, &label_box);
+                                SDL_Rect label_box {42, 2 + static_cast<int>(n) * 19, screen->w - 40, 15};
+                                SDL_BlitSurface(fa_small.text(current_playlist[playlist_view_pos + n]), nullptr, screen, &label_box);
                             }
                         }
                         else if (current_view == view_type::SONG_SEARCH)
                         {
                             SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 200, 20, 40));
-
-                            if (text_button({80, 60, 200, 100}, "List songs", fa, gc))
-                                for (auto & str : mpdc.get_current_playlist())
-                                {
-                                    std::cout << str << std::endl;
-                                }
                         }
                         else if (current_view == view_type::SHUTDOWN)
                         {
                             SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
 
-                            if (text_button( {80, 60, 200, 100}, "Shutdown", fa, gc))
+                            int const w = 8 * (screen->w - 40) / 10;
+                            int const h = 33 * screen->h / 100;
+                            int const x = 40 + (screen->w - 40) / 10;
+
+                            if (text_button({x, 11 * screen->h / 100, w, h}, "Shutdown", fa, gc))
+                            {
                                 std::cout << "shutting down" << std::endl;
+                            }
+                            if (text_button({x, 89 * screen->h / 100 - h, w, h}, "Reboot", fa, gc))
+                            {
+                                std::cout << "rebooting" << std::endl;
+                            }
                         }
                         SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
                     }
