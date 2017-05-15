@@ -22,6 +22,8 @@ struct mpd_control
     void next_song();
     void prev_song();
 
+    void play_position(int pos);
+
     void set_random(bool value);
 
     bool get_random();

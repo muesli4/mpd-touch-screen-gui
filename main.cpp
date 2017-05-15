@@ -304,8 +304,12 @@ struct gui_context
     gui_context(gui_event_info const & gei, SDL_Surface * s)
         : gei(gei)
         , target_surface(s)
-        , bg{10, 10, 10}
-        , fg{150, 150, 150}
+        , button_bg_color{150, 150, 150}
+        , button_frame_color{60, 60, 60}
+        , entry_bg_color{230, 224, 218}
+        , entry_frame_color{80, 80, 80}
+        , entry_selected_bg_color{210, 205, 200}
+        , bg_color{190, 190, 182}
     {
         renderer = SDL_CreateSoftwareRenderer(s);
     }
@@ -320,28 +324,59 @@ struct gui_context
         SDL_RenderPresent(renderer);
     }
 
-    void draw_box(SDL_Rect box, bool activated)
+    void draw_button_box(SDL_Rect box, bool activated)
     {
         if (activated)
         {
-            SDL_SetRenderDrawColor(renderer, fg.r, fg.g, fg.b, 0);
+            set_color(button_frame_color);
             SDL_RenderFillRect(renderer, &box);
         }
         else
         {
-            SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 0);
+            set_color(button_bg_color);
             SDL_RenderFillRect(renderer, &box);
-            SDL_SetRenderDrawColor(renderer, fg.r, fg.g, fg.b, 0);
+            set_color(button_frame_color);
             SDL_RenderDrawRect(renderer, &box);
         }
     }
+
+    void draw_entry_box(SDL_Rect box)
+    {
+        set_color(entry_bg_color);
+        SDL_RenderFillRect(renderer, &box);
+        set_color(entry_frame_color);
+        SDL_RenderDrawRect(renderer, &box);
+    }
+
+    void draw_background(SDL_Rect box)
+    {
+        set_color(bg_color);
+        SDL_RenderFillRect(renderer, &box);
+    }
+
+    void draw_entry_selected_background(SDL_Rect box)
+    {
+        set_color(entry_selected_bg_color);
+        SDL_RenderFillRect(renderer, &box);
+    }
+
 
     gui_event_info const & gei;
     SDL_Surface * target_surface;
     SDL_Renderer * renderer;
 
-    SDL_Color bg;
-    SDL_Color fg;
+    private:
+    void set_color(SDL_Color c)
+    {
+        SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 0);
+    }
+
+    SDL_Color button_bg_color;
+    SDL_Color button_frame_color;
+    SDL_Color entry_bg_color;
+    SDL_Color entry_frame_color;
+    SDL_Color entry_selected_bg_color;
+    SDL_Color bg_color;
 };
 
 bool text_button( SDL_Rect box
@@ -350,7 +385,7 @@ bool text_button( SDL_Rect box
                 , gui_context & gc
                 )
 {
-    gc.draw_box(box, pressed_in(box, gc.gei));
+    gc.draw_button_box(box, pressed_in(box, gc.gei));
     SDL_Surface * text_surf = fa.text(text);
     // center text in box
     SDL_Rect target_rect = {box.x + (box.w - text_surf->w) / 2, box.y + (box.h - text_surf->h) / 2, text_surf->w, text_surf->h};
@@ -367,6 +402,36 @@ bool image_button( SDL_Rect box
 {
     SDL_BlitSurface(pressed_in(box, gc.gei) ? pressed_surf : idle_surf, nullptr, gc.target_surface, &box);
     return is_button_active(box, gc.gei);
+}
+
+// for the moment only one highlight is supported, maybe more make sense later on
+int list_view(SDL_Rect box, std::vector<std::string> const & entries, std::size_t pos, int highlight, font_atlas & fa, gui_context & gc)
+{
+    int selection = -1;
+    gc.draw_entry_box(box);
+
+    SDL_Rect text_box { box.x + 1, box.y + 1, box.w - 2, static_cast<int>(fa.height()) };
+
+    while (pos <= entries.size() && text_box.y < box.y + box.h)
+    {
+        int const overlap = (text_box.y + text_box.h) - (box.y + box.h);
+
+        SDL_Rect src_rect { 0, 0, text_box.w, text_box.h - (overlap < 0 ? 0 : overlap) };
+        if (highlight == static_cast<int>(pos))
+            gc.draw_entry_selected_background(text_box);
+        SDL_Surface * text_surf = fa.text(entries[pos]);
+        SDL_SetSurfaceColorMod(text_surf, 0, 0, 0);
+        SDL_Rect tmp_rect = text_box;
+        SDL_BlitSurface(text_surf, &src_rect, gc.target_surface, &tmp_rect);
+
+        if (is_button_active(text_box, gc.gei))
+            selection = pos;
+
+        // TODO space ? font line skip?
+        text_box.y += text_box.h;
+        pos++;
+    }
+    return selection;
 }
 
 // TODO better name
@@ -715,7 +780,10 @@ int main(int argc, char * argv[])
                     {
                         if (current_view == view_type::PLAYLIST)
                         {
-                            SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 230, 215, 210));
+                            SDL_Rect playlist_rect = {view_rect.x + 2, view_rect.y + 2, view_rect.w - 4, 190};
+
+                            gc.draw_background(view_rect);
+
 
                             h_layout l(3, 30, {view_rect.x, view_rect.y + 192, view_rect.w, view_rect.h - 192}, true);
 
@@ -728,13 +796,11 @@ int main(int argc, char * argv[])
                             if (text_button(l.box(), "Down", fa, gc))
                                 playlist_view_pos = (playlist_view_pos - 10) % current_playlist.size();
 
-                            for (std::size_t n = 0; n < std::min(static_cast<std::size_t>(10), current_playlist.size() - playlist_view_pos); n++)
-                            {
-                                SDL_Rect label_box {42, 2 + static_cast<int>(n) * 19, screen->w - 40, 15};
-                                SDL_Surface * text_surf = fa_small.text(current_playlist[playlist_view_pos + n]);
-                                SDL_SetSurfaceColorMod(text_surf, 0, 0, 0);
-                                SDL_BlitSurface(text_surf, nullptr, screen, &label_box);
-                            }
+                            int selection = list_view(playlist_rect, current_playlist, playlist_view_pos, current_song_pos, fa_small, gc);
+                            if (selection != -1)
+                                mpdc.play_position(selection);
+
+                            // TODO calculcate from text height (font ascent)
                         }
                         else if (current_view == view_type::SONG_SEARCH)
                         {

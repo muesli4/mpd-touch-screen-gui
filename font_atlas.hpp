@@ -18,6 +18,8 @@ struct font_atlas
 
     SDL_Surface * text(std::string);
 
+    unsigned int height();
+
     private:
 
     std::unordered_map<std::string, SDL_Surface *> _prerendered;

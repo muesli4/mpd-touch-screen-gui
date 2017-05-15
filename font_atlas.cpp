@@ -35,3 +35,8 @@ SDL_Surface * font_atlas::text(std::string t)
         return it->second;
     }
 }
+
+unsigned int font_atlas::height()
+{
+    return TTF_FontHeight(_font);
+}

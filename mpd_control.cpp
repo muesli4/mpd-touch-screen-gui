@@ -118,6 +118,11 @@ void mpd_control::prev_song()
     add_external_task([](mpd_connection * c){ mpd_run_previous(c); });
 }
 
+void mpd_control::play_position(int pos)
+{
+    add_external_task([pos](mpd_connection * c){ mpd_run_play_pos(c, pos); });
+}
+
 void mpd_control::set_random(bool value)
 {
     add_external_task([value](mpd_connection * c) { mpd_run_random(c, value); });
