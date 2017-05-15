@@ -31,6 +31,7 @@
 // TODO when screen is darkened a touch event activates it
 // TODO when hardware rendering is available replace blits with texture copy of the renderer
 //      (for software it doesn't make sense, since the renderer will just make a copy of the surface to generate a texture)
+// TODO playlist: fade out song titles when over boundary or move source rectangle with time
 
 // TODO font rendering that breaks lines, makes caching harder (maybe cache words?)
 // TODO move constants into config
@@ -109,11 +110,42 @@ void blit_preserve_ar(SDL_Surface * source, SDL_Surface * dest, SDL_Rect const *
     }
 }
 
-void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, TTF_Font * font, std::string title, std::string artist, std::string album)
+//void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, TTF_Font * font, std::string title, std::string artist, std::string album)
+//{
+//    SDL_FillRect(surface, &brect, SDL_MapRGB(surface->format, 0, 0, 0));
+//
+//    SDL_Color font_color = { 255, 255, 255, 255 };
+//
+//    std::array<std::string const, 3> lines = { title, artist, album };
+//
+//    int y_offset = 20;
+//
+//    for (auto & line : lines)
+//    {
+//        if (!line.empty())
+//        {
+//            SDL_Surface * text_surface =
+//                TTF_RenderUTF8_Blended( font
+//                                      , line.c_str()
+//                                      , font_color
+//                                      );
+//
+//            if (text_surface != 0)
+//            {
+//                SDL_Rect r = { brect.x + 20, brect.y + y_offset, text_surface->w, text_surface->h };
+//                SDL_BlitSurface(text_surface, 0, surface, &r);
+//                SDL_FreeSurface(text_surface);
+//                y_offset += text_surface->h + 10;
+//            }
+//        }
+//    }
+//}
+
+void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, font_atlas & fa, std::string title, std::string artist, std::string album)
 {
     SDL_FillRect(surface, &brect, SDL_MapRGB(surface->format, 0, 0, 0));
 
-    SDL_Color font_color = { 255, 255, 255, 255 };
+    //SDL_Color font_color = { 255, 255, 255, 255 };
 
     std::array<std::string const, 3> lines = { title, artist, album };
 
@@ -121,18 +153,16 @@ void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, TTF_Font * fo
 
     for (auto & line : lines)
     {
-        SDL_Surface * text_surface =
-            TTF_RenderUTF8_Blended( font
-                                  , line.c_str()
-                                  , font_color
-                                  );
-
-        if (text_surface != 0)
+        if (!line.empty())
         {
-            SDL_Rect r = { brect.x + 20, brect.y + y_offset, text_surface->w, text_surface->h };
-            SDL_BlitSurface(text_surface, 0, surface, &r);
-            SDL_FreeSurface(text_surface);
-            y_offset += text_surface->h + 10;
+            SDL_Surface * text_surface = fa.text(line);
+
+            if (text_surface != 0)
+            {
+                SDL_Rect r = { brect.x + 20, brect.y + y_offset, text_surface->w, text_surface->h };
+                SDL_BlitSurface(text_surface, 0, surface, &r);
+                y_offset += text_surface->h + 10;
+            }
         }
     }
 }
@@ -453,6 +483,63 @@ template <typename T> void push_change_event(uint32_t event_type, user_event ue,
     }
 }
 
+// produce boxes to equally space widgets horizontally
+struct h_layout
+{
+    h_layout(unsigned int n, unsigned int percent_per_box, SDL_Rect const & outer_box, bool pad_y = false)
+    {
+        _box.w = percent_per_box * outer_box.w / 100;
+        _empty_pixels = (outer_box.w - _box.w * n) / (n + 1);
+        _box.x = _empty_pixels + outer_box.x;
+
+        int const padding = pad_y ? _empty_pixels : 0;
+        _box.y = outer_box.y + padding;
+        _box.h = outer_box.h - 2 * padding;
+    }
+
+    SDL_Rect box()
+    {
+        return _box;
+    }
+
+    void next()
+    {
+        _box.x += _empty_pixels + _box.w;
+    }
+
+    private:
+    SDL_Rect _box;
+    int _empty_pixels;
+};
+
+struct v_layout
+{
+    v_layout(unsigned int n, unsigned int percent_per_box, SDL_Rect const & outer_box, bool pad_x = false)
+    {
+        _box.h = percent_per_box * outer_box.h / 100;
+        _empty_pixels = (outer_box.h - _box.h * n) / (n + 1);
+        _box.y = _empty_pixels + outer_box.y;
+
+        int const padding = pad_x ? _empty_pixels : 0;
+        _box.x = outer_box.x + padding;
+        _box.w = outer_box.w - 2 * padding;
+    }
+
+    SDL_Rect box()
+    {
+        return _box;
+    }
+
+    void next()
+    {
+        _box.y += _empty_pixels + _box.h;
+    }
+
+    private:
+    SDL_Rect _box;
+    int _empty_pixels;
+};
+
 int main(int argc, char * argv[])
 {
     // TODO move to config
@@ -613,7 +700,7 @@ int main(int argc, char * argv[])
                             {
                                 draw_cover_replacement( screen
                                                       , view_rect
-                                                      , font
+                                                      , fa
                                                       , mpdc.get_current_title()
                                                       , mpdc.get_current_artist()
                                                       , mpdc.get_current_album()
@@ -628,25 +715,25 @@ int main(int argc, char * argv[])
                     {
                         if (current_view == view_type::PLAYLIST)
                         {
-                            SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 200, 200, 40));
+                            SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 230, 215, 210));
 
-                            int const y = 192 + 2;
-                            int const h = 38;
-                            int const w = 24 * (screen->w - 40) / 100;
+                            h_layout l(3, 30, {view_rect.x, view_rect.y + 192, view_rect.w, view_rect.h - 192}, true);
 
-
-                            // 7 24 7 24 7 24 7
-                            if (text_button({40 + 7 * (screen->w - 40) / 100, y, w, h}, "Jump", fa, gc))
+                            if (text_button(l.box(), "Jump", fa, gc))
                                 playlist_view_pos = current_song_pos;
-                            if (text_button({40 + 38 * (screen->w - 40) / 100, y, w, h}, "Up", fa, gc))
+                            l.next();
+                            if (text_button(l.box(), "Up", fa, gc))
                                 playlist_view_pos = (playlist_view_pos + 10) % current_playlist.size();
-                            if (text_button({40 + 69 * (screen->w - 40) / 100, y, w, h}, "Down", fa, gc))
+                            l.next();
+                            if (text_button(l.box(), "Down", fa, gc))
                                 playlist_view_pos = (playlist_view_pos - 10) % current_playlist.size();
 
                             for (std::size_t n = 0; n < std::min(static_cast<std::size_t>(10), current_playlist.size() - playlist_view_pos); n++)
                             {
                                 SDL_Rect label_box {42, 2 + static_cast<int>(n) * 19, screen->w - 40, 15};
-                                SDL_BlitSurface(fa_small.text(current_playlist[playlist_view_pos + n]), nullptr, screen, &label_box);
+                                SDL_Surface * text_surf = fa_small.text(current_playlist[playlist_view_pos + n]);
+                                SDL_SetSurfaceColorMod(text_surf, 0, 0, 0);
+                                SDL_BlitSurface(text_surf, nullptr, screen, &label_box);
                             }
                         }
                         else if (current_view == view_type::SONG_SEARCH)
@@ -657,23 +744,20 @@ int main(int argc, char * argv[])
                         {
                             SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
 
-                            int const w = 8 * (screen->w - 40) / 10;
-                            int const h = 33 * screen->h / 100;
-                            int const x = 40 + (screen->w - 40) / 10;
+                            v_layout l(2, 33, view_rect, true);
 
-                            if (text_button({x, 11 * screen->h / 100, w, h}, "Shutdown", fa, gc))
+                            if (text_button(l.box(), "Shutdown", fa, gc))
                             {
                                 std::cout << "shutting down" << std::endl;
                             }
-                            if (text_button({x, 89 * screen->h / 100 - h, w, h}, "Reboot", fa, gc))
+                            l.next();
+                            if (text_button(l.box(), "Reboot", fa, gc))
                             {
                                 std::cout << "rebooting" << std::endl;
                             }
                         }
                         SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
                     }
-
-                    gc.render();
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
