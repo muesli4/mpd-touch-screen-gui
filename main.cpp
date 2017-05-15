@@ -405,33 +405,62 @@ bool image_button( SDL_Rect box
 }
 
 // for the moment only one highlight is supported, maybe more make sense later on
-int list_view(SDL_Rect box, std::vector<std::string> const & entries, std::size_t pos, int highlight, font_atlas & fa, gui_context & gc)
+int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned int & pos, int highlight, font_atlas & fa, gui_context & gc)
 {
     int selection = -1;
     gc.draw_entry_box(box);
 
     SDL_Rect text_box { box.x + 1, box.y + 1, box.w - 2, static_cast<int>(fa.height()) };
 
-    while (pos <= entries.size() && text_box.y < box.y + box.h)
+    gui_event_info const & gei = gc.gei;
+
+    bool const swipe = gei.valid_swipe && gei.mouse_event;
+    // hacky update before drawing...
+    if (swipe)
+    {
+        if (gei.ydiff < 0)
+        {
+            // check underflow
+            unsigned int const next_pos = pos - 20;
+            pos = next_pos > pos ? 0 : next_pos;
+        }
+        else
+        {
+            pos = std::min(pos + 20, static_cast<unsigned int>(entries.size() - 10));
+        }
+    }
+
+    std::size_t n = pos;
+    while (n <= entries.size() && text_box.y < box.y + box.h)
     {
         int const overlap = (text_box.y + text_box.h) - (box.y + box.h);
+        int const h = text_box.h - (overlap < 0 ? 0 : overlap) - 1;
 
-        SDL_Rect src_rect { 0, 0, text_box.w, text_box.h - (overlap < 0 ? 0 : overlap) };
-        if (highlight == static_cast<int>(pos))
-            gc.draw_entry_selected_background(text_box);
-        SDL_Surface * text_surf = fa.text(entries[pos]);
-        SDL_SetSurfaceColorMod(text_surf, 0, 0, 0);
+        SDL_Rect src_rect { 0, 0, text_box.w, h };
+        if (highlight == static_cast<int>(n))
+            gc.draw_entry_selected_background({text_box.x, text_box.y, text_box.w, h});
+
+        SDL_Surface * text_surf = fa.text(entries[n]);
+        if (pressed_in(text_box, gei))
+        {
+            SDL_SetSurfaceColorMod(text_surf, 190, 80, 80);
+        }
+        else
+        {
+            SDL_SetSurfaceColorMod(text_surf, 0, 0, 0);
+        }
         SDL_Rect tmp_rect = text_box;
         SDL_BlitSurface(text_surf, &src_rect, gc.target_surface, &tmp_rect);
 
-        if (is_button_active(text_box, gc.gei))
-            selection = pos;
+        if (is_button_active(text_box, gei))
+            selection = n;
 
         // TODO space ? font line skip?
         text_box.y += text_box.h;
-        pos++;
+        n++;
     }
-    return selection;
+
+    return swipe ? -1 : selection;
 }
 
 // TODO better name
@@ -608,7 +637,7 @@ struct v_layout
 int main(int argc, char * argv[])
 {
     // TODO move to config
-    char const * const DEFAULT_FONT_PATH = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
+    char const * const DEFAULT_FONT_PATH = "/usr/share/fonts/TTF/DejaVuSans.ttf";
 
     // allows swipes with multiple lines, as long as the time between them is below this TODO not implemented
     //unsigned int const TOUCH_DEBOUNCE_TIME_MS_THRESHOLD_MAX = 200;
@@ -788,17 +817,22 @@ int main(int argc, char * argv[])
                             h_layout l(3, 30, {view_rect.x, view_rect.y + 192, view_rect.w, view_rect.h - 192}, true);
 
                             if (text_button(l.box(), "Jump", fa, gc))
-                                playlist_view_pos = current_song_pos;
+                                playlist_view_pos = (current_song_pos - 5) % current_playlist.size();
                             l.next();
                             if (text_button(l.box(), "Up", fa, gc))
-                                playlist_view_pos = (playlist_view_pos + 10) % current_playlist.size();
+                            {
+                                // check underflow
+                                unsigned int const next_pos = playlist_view_pos - 10;
+                                playlist_view_pos = next_pos > playlist_view_pos ? 0 : next_pos;
+                            }
                             l.next();
                             if (text_button(l.box(), "Down", fa, gc))
-                                playlist_view_pos = (playlist_view_pos - 10) % current_playlist.size();
+                                playlist_view_pos = std::min(playlist_view_pos + 10, static_cast<unsigned int>(current_playlist.size() - 10));
 
                             int selection = list_view(playlist_rect, current_playlist, playlist_view_pos, current_song_pos, fa_small, gc);
                             if (selection != -1)
                                 mpdc.play_position(selection);
+                            std::cout << playlist_view_pos << std::endl;
 
                             // TODO calculcate from text height (font ascent)
                         }
