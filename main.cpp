@@ -17,6 +17,8 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 
+#include <unicode/unistr.h>
+
 #include "mpd_control.hpp"
 #include "util.hpp"
 #include "font_atlas.hpp"
@@ -162,6 +164,7 @@ void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, font_atlas & 
                 SDL_Rect r = { brect.x + 20, brect.y + y_offset, text_surface->w, text_surface->h };
                 SDL_BlitSurface(text_surface, 0, surface, &r);
                 y_offset += text_surface->h + 10;
+                //SDL_FreeSurface(text_surface);
             }
         }
     }
@@ -386,10 +389,14 @@ bool text_button( SDL_Rect box
                 )
 {
     gc.draw_button_box(box, pressed_in(box, gc.gei));
-    SDL_Surface * text_surf = fa.text(text);
-    // center text in box
-    SDL_Rect target_rect = {box.x + (box.w - text_surf->w) / 2, box.y + (box.h - text_surf->h) / 2, text_surf->w, text_surf->h};
-    SDL_BlitSurface(text_surf, nullptr, gc.target_surface, &target_rect);
+    if (!text.empty())
+    {
+        SDL_Surface * text_surf = fa.text(text);
+        // center text in box
+        SDL_Rect target_rect = {box.x + (box.w - text_surf->w) / 2, box.y + (box.h - text_surf->h) / 2, text_surf->w, text_surf->h};
+        SDL_BlitSurface(text_surf, nullptr, gc.target_surface, &target_rect);
+        //SDL_FreeSurface(text_surf);
+    }
 
     return is_button_active(box, gc.gei);
 }
@@ -404,6 +411,19 @@ bool image_button( SDL_Rect box
     return is_button_active(box, gc.gei);
 }
 
+// check overflow and ensure at most upper_bound
+unsigned int inc_ensure_upper(unsigned int new_pos, unsigned int old_pos, unsigned int upper_bound)
+{
+    return new_pos < old_pos ? upper_bound : std::min(new_pos, upper_bound);
+}
+
+// check underflow and ensure at least lower_bound
+unsigned int dec_ensure_lower(unsigned int new_pos, unsigned int old_pos, unsigned int lower_bound)
+{
+    return new_pos > old_pos ? lower_bound : std::max(new_pos, lower_bound);
+}
+
+
 // for the moment only one highlight is supported, maybe more make sense later on
 int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned int & pos, int highlight, font_atlas & fa, gui_context & gc)
 {
@@ -414,24 +434,21 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
 
     gui_event_info const & gei = gc.gei;
 
-    bool const swipe = gei.valid_swipe && gei.mouse_event;
+    bool const swipe = gei.valid_swipe && gei.mouse_event && within_rect(gei.last_x, gei.last_y, box) && !gei.pressed;
     // hacky update before drawing...
     if (swipe)
     {
+        // TODO
+        unsigned int const distance = 100 * gei.ydiff / (box.w / 2);
+        unsigned int const next_pos = pos + distance;
         if (gei.ydiff < 0)
-        {
-            // check underflow
-            unsigned int const next_pos = pos - 20;
-            pos = next_pos > pos ? 0 : next_pos;
-        }
+            pos = dec_ensure_lower(next_pos, pos, 0);
         else
-        {
-            pos = std::min(pos + 20, static_cast<unsigned int>(entries.size() - 10));
-        }
+            pos = inc_ensure_upper(next_pos, pos, entries.size() - 10);
     }
 
     std::size_t n = pos;
-    while (n <= entries.size() && text_box.y < box.y + box.h)
+    while (n < entries.size() && text_box.y < box.y + box.h)
     {
         int const overlap = (text_box.y + text_box.h) - (box.y + box.h);
         int const h = text_box.h - (overlap < 0 ? 0 : overlap) - 1;
@@ -451,6 +468,7 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
         }
         SDL_Rect tmp_rect = text_box;
         SDL_BlitSurface(text_surf, &src_rect, gc.target_surface, &tmp_rect);
+        //SDL_FreeSurface(text_surf);
 
         if (is_button_active(text_box, gei))
             selection = n;
@@ -596,9 +614,15 @@ struct h_layout
         return _box;
     }
 
-    void next()
+    SDL_Rect box(int n)
     {
-        _box.x += _empty_pixels + _box.w;
+        SDL_Rect res {_box.x, _box.y, _box.w * n + _empty_pixels * (n - 1), _box.h };
+        return res;
+    }
+
+    void next(int n = 1)
+    {
+        _box.x += n * (_empty_pixels + _box.w);
     }
 
     private:
@@ -633,6 +657,33 @@ struct v_layout
     SDL_Rect _box;
     int _empty_pixels;
 };
+
+int utf8_byte_count(uint8_t start_byte)
+{
+    if (start_byte & 0b10000000)
+    {
+        int count = 0;
+        while (start_byte & 0b10000000)
+        {
+            count++;
+            start_byte <<= 1;
+        }
+        return count;
+    }
+    else
+    {
+        return 1;
+    }
+}
+
+void printbincharpad(char c)
+{
+    for (int i = 7; i >= 0; --i)
+    {
+        std::cout << ((c & (1 << i)) ? '1' : '0');
+    }
+    std::cout << ' ';
+}
 
 int main(int argc, char * argv[])
 {
@@ -701,8 +752,14 @@ int main(int argc, char * argv[])
     view_type current_view = view_type::COVER_SWIPE;
     bool view_dirty = false;
     unsigned int current_song_pos = 0;
-    unsigned int playlist_view_pos = 0;
-    std::vector<std::string> current_playlist;
+    unsigned int cpl_view_pos = 0;
+    std::vector<std::string> cpl;
+
+    bool present_search_result = false;
+    std::string search_term;
+    std::vector<std::string> search_items;
+    unsigned int search_items_view_pos = 0;
+    std::vector<int> search_item_positions;
 
     // TODO check for error?
     uint32_t const change_event_type = SDL_RegisterEvents(1);
@@ -722,7 +779,7 @@ int main(int argc, char * argv[])
 
     std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
 
-    current_playlist = mpdc.get_current_playlist();
+    cpl = mpdc.get_current_playlist();
 
     {
         font_atlas fa(DEFAULT_FONT_PATH, 20);
@@ -739,7 +796,7 @@ int main(int argc, char * argv[])
             {
                 if ( ev.type == SDL_QUIT
 #ifdef TEST_BUILD
-                     || ev.type == SDL_KEYDOWN
+                     || (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_q)
 #endif
 
                    )
@@ -817,28 +874,109 @@ int main(int argc, char * argv[])
                             h_layout l(3, 30, {view_rect.x, view_rect.y + 192, view_rect.w, view_rect.h - 192}, true);
 
                             if (text_button(l.box(), "Jump", fa, gc))
-                                playlist_view_pos = (current_song_pos - 5) % current_playlist.size();
+                                cpl_view_pos = current_song_pos >= 5 ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - 10)) : 0;
                             l.next();
                             if (text_button(l.box(), "Up", fa, gc))
-                            {
-                                // check underflow
-                                unsigned int const next_pos = playlist_view_pos - 10;
-                                playlist_view_pos = next_pos > playlist_view_pos ? 0 : next_pos;
-                            }
+                                cpl_view_pos = dec_ensure_lower(cpl_view_pos - 10, cpl_view_pos, 0);
                             l.next();
                             if (text_button(l.box(), "Down", fa, gc))
-                                playlist_view_pos = std::min(playlist_view_pos + 10, static_cast<unsigned int>(current_playlist.size() - 10));
+                                cpl_view_pos = inc_ensure_upper(cpl_view_pos + 10, cpl_view_pos, cpl.size() - 10);
 
-                            int selection = list_view(playlist_rect, current_playlist, playlist_view_pos, current_song_pos, fa_small, gc);
+                            int selection = list_view(playlist_rect, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
                             if (selection != -1)
                                 mpdc.play_position(selection);
-                            std::cout << playlist_view_pos << std::endl;
 
                             // TODO calculcate from text height (font ascent)
                         }
                         else if (current_view == view_type::SONG_SEARCH)
                         {
-                            SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 200, 20, 40));
+                            gc.draw_background(view_rect);
+
+                            if (present_search_result)
+                            {
+                                int selection = list_view(view_rect, search_items, search_items_view_pos, -1, fa_small, gc);
+
+                                if (selection != -1)
+                                    mpdc.play_position(search_item_positions[selection]);
+
+                                // TODO new search button
+                            }
+                            else
+                            {
+                                v_layout vl(6, 15, view_rect);
+
+
+                                auto top_box = vl.box();
+
+                                // draw keys
+                                std::array<char const * const, 5> letters
+                                    { "abcdef"
+                                    , "ghijkl"
+                                    , "mnopqr"
+                                    , "stuvwx"
+                                    , "yzäöü "
+                                    };
+                                vl.next();
+                                for (char const * row_ptr : letters)
+                                {
+                                    h_layout hl(6, 15, vl.box());
+                                    while (*row_ptr != 0)
+                                    {
+                                        bool line_finished = false;
+                                        // get a single utf8 encoded unicode character
+                                        char buff[8];
+
+                                        int const num_bytes = utf8_byte_count(*row_ptr);
+                                        for (int pos = 0; pos < num_bytes; pos++)
+                                        {
+                                            buff[pos] = *row_ptr;
+                                            row_ptr++;
+                                        }
+                                        buff[num_bytes] = 0;
+
+                                        if (text_button(hl.box(), buff, fa, gc))
+                                            search_term += buff;
+                                        hl.next();
+                                        if (line_finished)
+                                            break;
+                                    }
+                                    vl.next();
+                                }
+
+                                // render controls (such that a redraw is not necessary)
+                                {
+                                    h_layout hl(6, 15, top_box);
+
+                                    auto search_term_box = hl.box(5);
+
+                                    hl.next(5);
+
+                                    if (text_button(hl.box(), "⌫", fa, gc))
+                                        search_term.clear();
+                                    hl.next();
+                                    //if (text_button(hl.box(), "⏎", fa, gc))
+                                    //    std::cout << "text submit" << std::endl;
+
+                                    if (text_button(search_term_box, search_term, fa, gc))
+                                    {
+                                        // do search
+                                        search_item_positions.clear();
+                                        for (std::size_t pos = 0; pos < cpl.size(); pos++)
+                                        {
+                                            auto const & s = cpl[pos];
+                                            if (icu::UnicodeString::fromUTF8(s).toLower().indexOf(icu::UnicodeString::fromUTF8(search_term)) != -1)
+                                            {
+                                                search_item_positions.push_back(pos);
+                                                search_items.push_back(s);
+                                            }
+                                        }
+
+                                        present_search_result = true;
+                                        search_items_view_pos = 0;
+                                    }
+
+                                }
+                            }
                         }
                         else if (current_view == view_type::SHUTDOWN)
                         {
