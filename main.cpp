@@ -288,20 +288,14 @@ struct gui_context
     gui_context(gui_event_info const & gei, SDL_Surface * s)
         : gei(gei)
         , target_surface(s)
-        //, button_bg_color{150, 150, 150}
-        //, button_frame_color{60, 60, 60}
-        //, entry_bg_color{230, 224, 218}
-        //, entry_frame_color{80, 80, 80}
-        //, entry_selected_bg_color{210, 205, 200}
-        //, bg_color{190, 190, 182}
-
-        , button_bg_color{250, 250, 250}
+        , button_bg_color{230, 230, 230}
         , button_fg_color{20, 20, 20}
-        , button_frame_color{50, 50, 230}
-        , entry_bg_color{220, 220, 220}
-        , entry_frame_color{250, 150, 150}
-        , entry_selected_bg_color{100, 100, 150}
-        , bg_color{50, 50, 50}
+        , button_frame_color{150, 150, 150}
+        , button_selected_bg_color{250, 200, 200}
+        , entry_bg_color{250, 250, 250}
+        , entry_frame_color{100, 100, 100}
+        , entry_selected_bg_color{250, 200, 200}
+        , bg_color{250, 250, 250}
     {
         renderer = SDL_CreateSoftwareRenderer(s);
     }
@@ -318,18 +312,10 @@ struct gui_context
 
     void draw_button_box(SDL_Rect box, bool activated)
     {
-        if (activated)
-        {
-            set_color(button_frame_color);
-            SDL_RenderFillRect(renderer, &box);
-        }
-        else
-        {
-            set_color(button_bg_color);
-            SDL_RenderFillRect(renderer, &box);
-            set_color(button_frame_color);
-            SDL_RenderDrawRect(renderer, &box);
-        }
+        set_color(activated ? button_selected_bg_color : button_bg_color);
+        SDL_RenderFillRect(renderer, &box);
+        set_color(button_frame_color);
+        SDL_RenderDrawRect(renderer, &box);
     }
 
     void draw_button_text(SDL_Rect box, std::string const & text, font_atlas & fa)
@@ -374,6 +360,7 @@ struct gui_context
     SDL_Color button_bg_color;
     SDL_Color button_fg_color;
     SDL_Color button_frame_color;
+    SDL_Color button_selected_bg_color;
     SDL_Color entry_bg_color;
     SDL_Color entry_frame_color;
     SDL_Color entry_selected_bg_color;
@@ -984,7 +971,7 @@ int main(int argc, char * argv[])
                                     //if (text_button(hl.box(), "⏎", fa, gc))
                                     //    std::cout << "text submit" << std::endl;
 
-                                    if (text_button(search_term_box, search_term, fa, gc))
+                                    if (text_button(search_term_box, '\'' + search_term + '\'', fa, gc))
                                     {
                                         // do search
                                         search_item_positions.clear();
