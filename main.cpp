@@ -616,7 +616,7 @@ struct h_layout
 
     SDL_Rect box(int n)
     {
-        SDL_Rect res {_box.x, _box.y, _box.w * n + _empty_pixels * (n - 1), _box.h };
+        SDL_Rect res { _box.x, _box.y, _box.w * n + _empty_pixels * (n - 1), _box.h };
         return res;
     }
 
@@ -648,9 +648,15 @@ struct v_layout
         return _box;
     }
 
-    void next()
+    SDL_Rect box(int n)
     {
-        _box.y += _empty_pixels + _box.h;
+        SDL_Rect res { _box.x, _box.y, _box.w, _box.h * n + _empty_pixels * (n - 1) };
+        return res;
+    }
+
+    void next(int n = 1)
+    {
+        _box.y += n * (_empty_pixels + _box.h);
     }
 
     private:
@@ -867,17 +873,34 @@ int main(int argc, char * argv[])
 
                             if (present_search_results)
                             {
-                                int selection = list_view(view_rect, search_items, search_items_view_pos, -1, fa_small, gc);
+                                v_layout vl(6, 15, view_rect);
+                                auto top_box = vl.box(5);
+                                vl.next(5);
+
+                                h_layout hl(3, 30, vl.box());
+                                if (text_button(hl.box(), "Back", fa, gc))
+                                {
+                                    search_items.clear();
+                                    search_item_positions.clear();
+                                    search_term.clear();
+                                    present_search_results = false;
+                                }
+                                hl.next();
+                                if (text_button(hl.box(), "Up", fa, gc))
+                                    search_items_view_pos = dec_ensure_lower(search_items_view_pos - 10, search_items_view_pos, 0);
+                                hl.next();
+                                if (text_button(hl.box(), "Down", fa, gc))
+                                    // TODO Down works with small result
+                                    search_items_view_pos = inc_ensure_upper(search_items_view_pos + 10, search_items_view_pos, search_items.size() - 10);
+
+                                int selection = list_view(top_box, search_items, search_items_view_pos, -1, fa_small, gc);
 
                                 if (selection != -1)
                                     mpdc.play_position(search_item_positions[selection]);
-
-                                // TODO new search button
                             }
                             else
                             {
                                 v_layout vl(6, 15, view_rect);
-
 
                                 auto top_box = vl.box();
 
