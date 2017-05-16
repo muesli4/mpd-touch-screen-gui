@@ -600,6 +600,7 @@ template <typename T> void push_change_event(uint32_t event_type, user_event ue,
     }
 }
 
+// TODO define box sizes in percent of empty space to prevent: percent_per_box * n > 100
 // produce boxes to equally space widgets horizontally
 struct h_layout
 {
@@ -859,23 +860,24 @@ int main(int argc, char * argv[])
                     {
                         if (current_view == view_type::PLAYLIST)
                         {
-                            SDL_Rect playlist_rect = {view_rect.x + 2, view_rect.y + 2, view_rect.w - 4, 190};
-
                             gc.draw_background(view_rect);
 
+                            v_layout vl(6, 15, view_rect, true);
+                            auto top_box = vl.box(5);
+                            vl.next(5);
 
-                            h_layout l(3, 30, {view_rect.x, view_rect.y + 192, view_rect.w, view_rect.h - 192}, true);
+                            h_layout hl(3, 30, vl.box());
 
-                            if (text_button(l.box(), "Jump", fa, gc))
+                            if (text_button(hl.box(), "Jump", fa, gc))
                                 cpl_view_pos = current_song_pos >= 5 ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - 10)) : 0;
-                            l.next();
-                            if (text_button(l.box(), "Up", fa, gc))
+                            hl.next();
+                            if (text_button(hl.box(), "Up", fa, gc))
                                 cpl_view_pos = dec_ensure_lower(cpl_view_pos - 10, cpl_view_pos, 0);
-                            l.next();
-                            if (text_button(l.box(), "Down", fa, gc))
+                            hl.next();
+                            if (text_button(hl.box(), "Down", fa, gc))
                                 cpl_view_pos = inc_ensure_upper(cpl_view_pos + 10, cpl_view_pos, cpl.size() - 10);
 
-                            int selection = list_view(playlist_rect, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
+                            int selection = list_view(top_box, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
                             if (selection != -1)
                                 mpdc.play_position(selection);
 
@@ -887,7 +889,7 @@ int main(int argc, char * argv[])
 
                             if (present_search_results)
                             {
-                                v_layout vl(6, 15, view_rect);
+                                v_layout vl(6, 15, view_rect, true);
                                 auto top_box = vl.box(5);
                                 vl.next(5);
 
