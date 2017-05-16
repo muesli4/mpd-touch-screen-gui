@@ -33,3 +33,21 @@ std::string string_from_ptr(char const * const ptr)
 {
     return ptr == 0 ? "" : ptr;
 }
+
+int utf8_byte_count(uint8_t start_byte)
+{
+    if (start_byte & 0b10000000)
+    {
+        int count = 0;
+        while (start_byte & 0b10000000)
+        {
+            count++;
+            start_byte <<= 1;
+        }
+        return count;
+    }
+    else
+    {
+        return 1;
+    }
+}

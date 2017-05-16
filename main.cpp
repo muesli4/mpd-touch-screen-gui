@@ -658,33 +658,6 @@ struct v_layout
     int _empty_pixels;
 };
 
-int utf8_byte_count(uint8_t start_byte)
-{
-    if (start_byte & 0b10000000)
-    {
-        int count = 0;
-        while (start_byte & 0b10000000)
-        {
-            count++;
-            start_byte <<= 1;
-        }
-        return count;
-    }
-    else
-    {
-        return 1;
-    }
-}
-
-void printbincharpad(char c)
-{
-    for (int i = 7; i >= 0; --i)
-    {
-        std::cout << ((c & (1 << i)) ? '1' : '0');
-    }
-    std::cout << ' ';
-}
-
 int main(int argc, char * argv[])
 {
     // TODO move to config
@@ -755,7 +728,7 @@ int main(int argc, char * argv[])
     unsigned int cpl_view_pos = 0;
     std::vector<std::string> cpl;
 
-    bool present_search_result = false;
+    bool present_search_results = false;
     std::string search_term;
     std::vector<std::string> search_items;
     unsigned int search_items_view_pos = 0;
@@ -892,7 +865,7 @@ int main(int argc, char * argv[])
                         {
                             gc.draw_background(view_rect);
 
-                            if (present_search_result)
+                            if (present_search_results)
                             {
                                 int selection = list_view(view_rect, search_items, search_items_view_pos, -1, fa_small, gc);
 
@@ -971,7 +944,7 @@ int main(int argc, char * argv[])
                                             }
                                         }
 
-                                        present_search_result = true;
+                                        present_search_results = true;
                                         search_items_view_pos = 0;
                                     }
 
