@@ -288,12 +288,20 @@ struct gui_context
     gui_context(gui_event_info const & gei, SDL_Surface * s)
         : gei(gei)
         , target_surface(s)
-        , button_bg_color{150, 150, 150}
-        , button_frame_color{60, 60, 60}
-        , entry_bg_color{230, 224, 218}
-        , entry_frame_color{80, 80, 80}
-        , entry_selected_bg_color{210, 205, 200}
-        , bg_color{190, 190, 182}
+        //, button_bg_color{150, 150, 150}
+        //, button_frame_color{60, 60, 60}
+        //, entry_bg_color{230, 224, 218}
+        //, entry_frame_color{80, 80, 80}
+        //, entry_selected_bg_color{210, 205, 200}
+        //, bg_color{190, 190, 182}
+
+        , button_bg_color{250, 250, 250}
+        , button_fg_color{20, 20, 20}
+        , button_frame_color{50, 50, 230}
+        , entry_bg_color{220, 220, 220}
+        , entry_frame_color{250, 150, 150}
+        , entry_selected_bg_color{100, 100, 150}
+        , bg_color{50, 50, 50}
     {
         renderer = SDL_CreateSoftwareRenderer(s);
     }
@@ -324,6 +332,15 @@ struct gui_context
         }
     }
 
+    void draw_button_text(SDL_Rect box, std::string const & text, font_atlas & fa)
+    {
+        SDL_Surface * text_surf = fa.text(text);
+        SDL_SetSurfaceColorMod(text_surf, button_fg_color.r, button_fg_color.g, button_fg_color.b);
+        // center text in box
+        SDL_Rect target_rect = {box.x + (box.w - text_surf->w) / 2, box.y + (box.h - text_surf->h) / 2, text_surf->w, text_surf->h};
+        SDL_BlitSurface(text_surf, nullptr, target_surface, &target_rect);
+    }
+
     void draw_entry_box(SDL_Rect box)
     {
         set_color(entry_bg_color);
@@ -344,7 +361,6 @@ struct gui_context
         SDL_RenderFillRect(renderer, &box);
     }
 
-
     gui_event_info const & gei;
     SDL_Surface * target_surface;
     SDL_Renderer * renderer;
@@ -356,6 +372,7 @@ struct gui_context
     }
 
     SDL_Color button_bg_color;
+    SDL_Color button_fg_color;
     SDL_Color button_frame_color;
     SDL_Color entry_bg_color;
     SDL_Color entry_frame_color;
@@ -371,13 +388,7 @@ bool text_button( SDL_Rect box
 {
     gc.draw_button_box(box, pressed_in(box, gc.gei));
     if (!text.empty())
-    {
-        SDL_Surface * text_surf = fa.text(text);
-        // center text in box
-        SDL_Rect target_rect = {box.x + (box.w - text_surf->w) / 2, box.y + (box.h - text_surf->h) / 2, text_surf->w, text_surf->h};
-        SDL_BlitSurface(text_surf, nullptr, gc.target_surface, &target_rect);
-        //SDL_FreeSurface(text_surf);
-    }
+        gc.draw_button_text(box, text, fa);
 
     return is_button_active(box, gc.gei);
 }
@@ -826,21 +837,22 @@ int main(int argc, char * argv[])
                         {
                             if (!cover_surface_ptr)
                             {
+                                SDL_Rect cover_rect { 0, 0, view_rect.w, view_rect.h};
                                 SDL_Surface * cover_surface;
                                 view_dirty = true;
                                 SDL_Surface * img_surface = load_cover(current_song_path);
                                 if (img_surface != nullptr)
                                 {
                                     has_cover = true;
-                                    cover_surface = create_similar_surface(screen, view_rect.x, view_rect.y);
-                                    blit_preserve_ar(img_surface, cover_surface, &view_rect);
+                                    cover_surface = create_similar_surface(screen, cover_rect.w, cover_rect.h);
+                                    blit_preserve_ar(img_surface, cover_surface, &cover_rect);
                                 }
                                 else
                                 {
                                     has_cover = false;
                                     cover_surface =
                                         create_cover_replacement( screen
-                                                                , {0, 0, view_rect.w, view_rect.h}
+                                                                , cover_rect
                                                                 , fa
                                                                 , mpdc.get_current_title()
                                                                 , mpdc.get_current_artist()
