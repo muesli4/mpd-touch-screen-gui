@@ -13,6 +13,8 @@
 #include <condition_variable>
 #include <chrono>
 
+#include <cstdlib>
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
@@ -38,13 +40,15 @@
 // TODO font rendering that breaks lines, makes caching harder (maybe cache words?)
 // TODO move constants into config
 
-char const * const base_dir =
 #ifdef TEST_BUILD
-    "/home/moritz/Musik/"
+char const * const BASE_DIR = "/home/moritz/Musik/";
+char const * const SHUTDOWN_CMD = "echo Shutting down";
+char const * const REBOOT_CMD = "echo Rebooting";
 #else
-    "/mnt/music/library/"
+char const * const BASE_DIR = "/mnt/music/library/";
+char const * const SHUTDOWN_CMD = "sudo poweroff";
+char const * const REBOOT_CMD = "sudo reboot";
 #endif
-    ;
 
 // determines the minimum length of a swipe
 unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
@@ -172,7 +176,7 @@ void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, font_atlas & 
 
 SDL_Surface * load_cover(std::string rel_song_dir_path)
 {
-    std::string const abs_cover_dir = absolute_cover_path(base_dir, basename(rel_song_dir_path));
+    std::string const abs_cover_dir = absolute_cover_path(BASE_DIR, basename(rel_song_dir_path));
     SDL_Surface * cover;
     for (auto const & name : cover_names)
     {
@@ -574,7 +578,8 @@ view_type cycle_view_type(view_type v)
 enum class user_event
 {
     RANDOM_CHANGED,
-    SONG_CHANGED
+    SONG_CHANGED,
+    REFRESH
 };
 
 void push_user_event(uint32_t event_type, user_event ue)
@@ -664,10 +669,19 @@ struct v_layout
     int _empty_pixels;
 };
 
+enum quit_action
+{
+    SHUTDOWN,
+    REBOOT,
+    NONE
+};
+
 int main(int argc, char * argv[])
 {
     // TODO move to config
     char const * const DEFAULT_FONT_PATH = "/usr/share/fonts/TTF/DejaVuSans.ttf";
+
+    quit_action quit_action = quit_action::NONE;
 
     // allows swipes with multiple lines, as long as the time between them is below this TODO not implemented
     //unsigned int const TOUCH_DEBOUNCE_TIME_MS_THRESHOLD_MAX = 200;
@@ -884,6 +898,9 @@ int main(int argc, char * argv[])
                                     search_item_positions.clear();
                                     search_term.clear();
                                     present_search_results = false;
+
+                                    // necessary evil
+                                    push_user_event(change_event_type, user_event::REFRESH);
                                 }
                                 hl.next();
                                 if (text_button(hl.box(), "Up", fa, gc))
@@ -969,6 +986,9 @@ int main(int argc, char * argv[])
 
                                         present_search_results = true;
                                         search_items_view_pos = 0;
+
+                                        // necessary evil
+                                        push_user_event(change_event_type, user_event::REFRESH);
                                     }
 
                                 }
@@ -976,18 +996,21 @@ int main(int argc, char * argv[])
                         }
                         else if (current_view == view_type::SHUTDOWN)
                         {
-                            SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
+                            gc.draw_background(view_rect);
+                            //SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
 
                             v_layout l(2, 33, view_rect, true);
 
                             if (text_button(l.box(), "Shutdown", fa, gc))
                             {
-                                std::cout << "shutting down" << std::endl;
+                                run = false;
+                                quit_action = quit_action::SHUTDOWN;
                             }
                             l.next();
                             if (text_button(l.box(), "Reboot", fa, gc))
                             {
-                                std::cout << "rebooting" << std::endl;
+                                run = false;
+                                quit_action = quit_action::REBOOT;
                             }
                         }
                         SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
@@ -1006,6 +1029,12 @@ int main(int argc, char * argv[])
 
     SDL_DestroyWindow(window);
     SDL_Quit();
+
+    if (quit_action == quit_action::SHUTDOWN)
+        std::system(SHUTDOWN_CMD);
+    else if (quit_action == quit_action::REBOOT)
+        std::system(REBOOT_CMD);
+
     return 0;
 }
 
