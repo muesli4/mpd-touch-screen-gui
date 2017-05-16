@@ -116,42 +116,17 @@ void blit_preserve_ar(SDL_Surface * source, SDL_Surface * dest, SDL_Rect const *
     }
 }
 
-//void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, TTF_Font * font, std::string title, std::string artist, std::string album)
-//{
-//    SDL_FillRect(surface, &brect, SDL_MapRGB(surface->format, 0, 0, 0));
-//
-//    SDL_Color font_color = { 255, 255, 255, 255 };
-//
-//    std::array<std::string const, 3> lines = { title, artist, album };
-//
-//    int y_offset = 20;
-//
-//    for (auto & line : lines)
-//    {
-//        if (!line.empty())
-//        {
-//            SDL_Surface * text_surface =
-//                TTF_RenderUTF8_Blended( font
-//                                      , line.c_str()
-//                                      , font_color
-//                                      );
-//
-//            if (text_surface != 0)
-//            {
-//                SDL_Rect r = { brect.x + 20, brect.y + y_offset, text_surface->w, text_surface->h };
-//                SDL_BlitSurface(text_surface, 0, surface, &r);
-//                SDL_FreeSurface(text_surface);
-//                y_offset += text_surface->h + 10;
-//            }
-//        }
-//    }
-//}
-
-void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, font_atlas & fa, std::string title, std::string artist, std::string album)
+SDL_Surface * create_similar_surface(SDL_Surface const * s, int width, int height)
 {
-    SDL_FillRect(surface, &brect, SDL_MapRGB(surface->format, 0, 0, 0));
+    SDL_PixelFormat const & format = *(s->format);
+    return SDL_CreateRGBSurface(0, width, height, format.BitsPerPixel, format.Rmask, format.Gmask, format.Bmask, format.Amask);
+}
 
-    //SDL_Color font_color = { 255, 255, 255, 255 };
+SDL_Surface * create_cover_replacement(SDL_Surface const * s, SDL_Rect brect, font_atlas & fa, std::string title, std::string artist, std::string album)
+{
+    SDL_Surface * target_surface = create_similar_surface(s, brect.w, brect.h);
+
+    SDL_FillRect(target_surface, nullptr, SDL_MapRGB(target_surface->format, 0, 0, 0));
 
     std::array<std::string const, 3> lines = { title, artist, album };
 
@@ -165,13 +140,15 @@ void draw_cover_replacement(SDL_Surface * surface, SDL_Rect brect, font_atlas & 
 
             if (text_surface != 0)
             {
-                SDL_Rect r = { brect.x + 20, brect.y + y_offset, text_surface->w, text_surface->h };
-                SDL_BlitSurface(text_surface, 0, surface, &r);
+                SDL_Rect r = { 20, y_offset, text_surface->w, text_surface->h };
+                SDL_BlitSurface(text_surface, 0, target_surface, &r);
                 y_offset += text_surface->h + 10;
                 //SDL_FreeSurface(text_surface);
             }
         }
     }
+
+    return target_surface;
 }
 
 SDL_Surface * load_cover(std::string rel_song_dir_path)
@@ -755,6 +732,9 @@ int main(int argc, char * argv[])
     unsigned int search_items_view_pos = 0;
     std::vector<int> search_item_positions;
 
+    std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> cover_surface_ptr{nullptr, [](SDL_Surface * s) {SDL_FreeSurface(s);}};
+    bool has_cover = false;
+
     // TODO check for error?
     uint32_t const change_event_type = SDL_RegisterEvents(1);
 
@@ -806,6 +786,14 @@ int main(int argc, char * argv[])
 #endif
                         )
                 {
+
+                    if (ev.type == SDL_USEREVENT && static_cast<user_event>(ev.user.code) == user_event::SONG_CHANGED)
+                    {
+                        // TODO do not reset
+                        // if (has_cover && same album)
+                        cover_surface_ptr.reset();
+                    }
+
                     apply_sdl_event(ev, gei);
 
                     // global buttons
@@ -832,25 +820,37 @@ int main(int argc, char * argv[])
                     if (current_view == view_type::COVER_SWIPE)
                     {
                         action a = swipe_area(view_rect, gei);
+
                         // redraw cover if it is a new one or if marked dirty
-                        if ((ev.type == SDL_USEREVENT && static_cast<user_event>(ev.user.code) == user_event::SONG_CHANGED) || view_dirty)
+                        if (view_dirty || !cover_surface_ptr)
                         {
-                            SDL_Surface * cover_surface = load_cover(current_song_path);
-                            if (cover_surface != nullptr)
+                            if (!cover_surface_ptr)
                             {
-                                blit_preserve_ar(cover_surface, screen, &view_rect);
-                                SDL_FreeSurface(cover_surface);
+                                SDL_Surface * cover_surface;
+                                view_dirty = true;
+                                SDL_Surface * img_surface = load_cover(current_song_path);
+                                if (img_surface != nullptr)
+                                {
+                                    has_cover = true;
+                                    cover_surface = create_similar_surface(screen, view_rect.x, view_rect.y);
+                                    blit_preserve_ar(img_surface, cover_surface, &view_rect);
+                                }
+                                else
+                                {
+                                    has_cover = false;
+                                    cover_surface =
+                                        create_cover_replacement( screen
+                                                                , {0, 0, view_rect.w, view_rect.h}
+                                                                , fa
+                                                                , mpdc.get_current_title()
+                                                                , mpdc.get_current_artist()
+                                                                , mpdc.get_current_album()
+                                                                );
+                                }
+                                cover_surface_ptr.reset(cover_surface);
                             }
-                            else
-                            {
-                                draw_cover_replacement( screen
-                                                      , view_rect
-                                                      , fa
-                                                      , mpdc.get_current_title()
-                                                      , mpdc.get_current_artist()
-                                                      , mpdc.get_current_album()
-                                                      );
-                            }
+                            SDL_Rect r = view_rect;
+                            SDL_BlitSurface(cover_surface_ptr.get(), nullptr, screen, &r);
                             SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
                             view_dirty = false;
                         }
