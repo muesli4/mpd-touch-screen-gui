@@ -174,6 +174,9 @@ SDL_Surface * font_atlas::text(std::string t)
 
 SDL_Surface * font_atlas::word(std::string w)
 {
+    // FIXME: temporary solution - do not use too much memory
+    if (_prerendered.size() > 20000) _prerendered.clear();
+
     auto it = _prerendered.find(w);
     if (it == _prerendered.end())
     {
