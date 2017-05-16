@@ -1,4 +1,6 @@
 #include "font_atlas.hpp"
+#include <vector>
+#include <iostream>
 
 font_not_found::font_not_found(std::string msg)
     : std::runtime_error("font not found: " + msg)
@@ -12,6 +14,12 @@ font_atlas::font_atlas(std::string font_path, int ptsize)
 
     if (_font == nullptr)
         throw font_not_found(TTF_GetError());
+
+    TTF_GlyphMetrics(_font, ' ', nullptr, nullptr, nullptr, nullptr, &_space_advance);
+
+    //std::cout << "a = " << TTF_GetFontKerningSizeGlyphs(_font, '.', ' ')
+    //          << "\nb = " << TTF_GetFontKerningSizeGlyphs(_font, ' ', 'J')
+    //          << "\nc = " << TTF_GetFontKerningSizeGlyphs(_font, '.', 'J') << std::endl;
 }
 
 font_atlas::~font_atlas()
@@ -22,13 +30,154 @@ font_atlas::~font_atlas()
         SDL_FreeSurface(p.second);
 }
 
+/*
+// http://stackoverflow.com/questions/18534494/convert-from-utf-8-to-unicode-c
+#include <deque>
+uint32_t utf8_to_ucs4(std::deque<uint8_t> coded)
+{
+    int charcode = 0;
+    int t = coded.front();
+    coded.pop_front();
+    if (t < 128)
+    {
+        return t;
+    }
+    int high_bit_mask = (1 << 6) -1;
+    int high_bit_shift = 0;
+    int total_bits = 0;
+    const int other_bits = 6;
+    while((t & 0xC0) == 0xC0)
+    {
+        t <<= 1;
+        t &= 0xff;
+        total_bits += 6;
+        high_bit_mask >>= 1;
+        high_bit_shift++;
+        charcode <<= other_bits;
+        charcode |= coded.front() & ((1 << other_bits)-1);
+        coded.pop_front();
+    }
+    charcode |= ((t >> high_bit_shift) & high_bit_mask) << total_bits;
+    return charcode;
+}
+
+uint32_t get_last_ucs4(std::string s)
+{
+    char const * ptr = s.c_str() + s.size() - 1;
+    if (*ptr == 0) ptr = " ";
+
+    std::deque<uint8_t> d;
+    // starting byte has highest bit set
+    while (*ptr & 0b10000000)
+    {
+        d.push_front(*ptr);
+        ptr--;
+    }
+    d.push_front(*ptr);
+    return utf8_to_ucs4(d);
+}
+
+uint32_t get_first_ucs4(std::string s)
+{
+    char const * ptr = s.c_str();
+    if (*ptr == 0) ptr = " ";
+
+    std::deque<uint8_t> d;
+    d.push_back(*ptr);
+    ptr++;
+    while (*ptr & 0b10000000)
+    {
+        d.push_back(*ptr);
+        ptr++;
+    }
+    return utf8_to_ucs4(d);
+}
+*/
+
 SDL_Surface * font_atlas::text(std::string t)
 {
-    // TODO add limit to prevent filling memory
-    auto it = _prerendered.find(t);
+    return word(t);
+    /*
+    if (t.empty())
+    {
+        return SDL_CreateRGBSurfaceWithFormat(0, 0, 0, 32, SDL_PIXELFORMAT_RGBA32);
+    }
+    std::vector<std::string> words;
+
+    std::size_t pos;
+    std::size_t last_pos = 0;
+    while ((pos = t.find(' ', last_pos)) != std::string::npos)
+    {
+        words.push_back(t.substr(last_pos, pos - last_pos));
+        last_pos = pos + 1;
+    }
+    words.push_back(t.substr(last_pos));
+
+    //std::cout << "words" << std::endl;
+
+    int width = 0;
+    std::vector<SDL_Surface *> surfaces;
+
+    for (auto const & w : words)
+    {
+        // FIXME: Why does TTF_RenderUTF8_Blended return nullptr for ""?
+        SDL_Surface * s = word(w.empty() ? " " : w);
+
+        SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_BLEND);
+        surfaces.push_back(s);
+        width += s->w;
+    }
+    //std::cout << "surfaces" << std::endl;
+
+    std::vector<int> spaces;
+    spaces.push_back(0);
+    for (std::size_t n = 0; n + 1 < words.size(); n++)
+    {
+        int minx;
+        int maxx;
+        TTF_GlyphMetrics(_font, ' ', &minx, &maxx, nullptr, nullptr, nullptr);
+        int const left_kerning = TTF_GetFontKerningSizeGlyphs(_font, get_last_ucs4(words[n]), get_first_ucs4(" "));
+        int const right_kerning = TTF_GetFontKerningSizeGlyphs(_font, get_first_ucs4(" "), get_last_ucs4(words[n + 1]));
+        int const instant_kerning = TTF_GetFontKerningSizeGlyphs(_font, get_first_ucs4(words[n]), get_last_ucs4(words[n + 1]));
+        int const space = 4 + instant_kerning;
+        width += space;
+        spaces.push_back(space);
+        //std::cout << "word[" << n << "] = \"" << words[n]
+        //          << "\",  with space " << left_kerning << " + " << _space_advance << " + " << right_kerning
+        //          << ", instant kerning = " << instant_kerning
+        //          << ", minx = " << minx
+        //          << ", maxx = " << maxx
+        //          << std::endl;
+    }
+    //std::cout << "spaces" << std::endl;
+
+    // TODO empty surface?
+    //SDL_Surface * result = SDL_CreateRGBSurfaceWithFormat(0, width, height(), surfaces[0]->format->BitsPerPixel, surfaces[0]->format->format);
+    SDL_Surface * result = SDL_CreateRGBSurfaceWithFormat(0, width, height(), 32, SDL_PIXELFORMAT_RGBA32);
+    SDL_SetSurfaceBlendMode(result, SDL_BLENDMODE_NONE);
+
+    int x = 0;
+    for (std::size_t n = 0; n < surfaces.size(); n++)
+    {
+        SDL_Surface * s = surfaces[n];
+        x += spaces[n];
+        SDL_Rect r {x, 0, s->w, s->h};
+        SDL_BlitSurface(s, nullptr, result, &r);
+        x += s->w;
+    }
+    //std::cout << "blitting" << std::endl;
+
+    SDL_SetSurfaceBlendMode(result, SDL_BLENDMODE_BLEND);
+    return result;
+    */
+}
+
+SDL_Surface * font_atlas::word(std::string w)
+{
+    auto it = _prerendered.find(w);
     if (it == _prerendered.end())
     {
-        return _prerendered[t] = TTF_RenderUTF8_Blended(_font, t.c_str(), {255, 255, 255});
+        return _prerendered[w] = TTF_RenderUTF8_Blended(_font, w.c_str(), {255, 255, 255});
     }
     else
     {

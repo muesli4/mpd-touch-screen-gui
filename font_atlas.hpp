@@ -22,8 +22,11 @@ struct font_atlas
 
     private:
 
+    SDL_Surface * word(std::string);
+
     std::unordered_map<std::string, SDL_Surface *> _prerendered;
     TTF_Font * _font;
+    int _space_advance;
 };
 
 #endif
