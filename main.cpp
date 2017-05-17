@@ -298,7 +298,7 @@ struct gui_context
         , button_fg_color{20, 20, 20}
         , button_frame_color{150, 150, 150}
         , button_selected_bg_color{250, 200, 200}
-        , entry_bg_color{250, 250, 250}
+        , entry_bg_color{255, 255, 255}
         , entry_frame_color{100, 100, 100}
         , entry_selected_bg_color{250, 200, 200}
         , bg_color{250, 250, 250}
@@ -439,7 +439,6 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
 
     int selection = -1;
     gc.draw_entry_box(box);
-
 
     SDL_Rect text_box { box.x + 1, box.y + 1, box.w - 2, static_cast<int>(fa.height()) };
 
@@ -615,75 +614,66 @@ template <typename T> void push_change_event(uint32_t event_type, user_event ue,
     }
 }
 
-// TODO define box sizes in percent of empty space to prevent: percent_per_box * n > 100
 // produce boxes to equally space widgets horizontally
-struct h_layout
+struct base_layout
 {
-    h_layout(unsigned int n, unsigned int percent_per_box, SDL_Rect const & outer_box, bool pad_y = false)
+    base_layout(unsigned int n, unsigned int spacing, SDL_Rect const & outer_box, int side)
+        : _spacing(spacing)
+        , _box_len(static_cast<double>(side - (n - 1) * spacing) / n)
+        , _box_num(0)
+        , _outer_box(outer_box)
     {
-        _box.w = percent_per_box * outer_box.w / 100;
-        _empty_pixels = (outer_box.w - _box.w * n) / (n + 1);
-        _box.x = _empty_pixels + outer_box.x;
-
-        int const padding = pad_y ? _empty_pixels : 0;
-        _box.y = outer_box.y + padding;
-        _box.h = outer_box.h - 2 * padding;
-    }
-
-    SDL_Rect box()
-    {
-        return _box;
-    }
-
-    SDL_Rect box(int n)
-    {
-        SDL_Rect res { _box.x, _box.y, _box.w * n + _empty_pixels * (n - 1), _box.h };
-        return res;
     }
 
     void next(int n = 1)
     {
-        _box.x += n * (_empty_pixels + _box.w);
+        _box_num += n;
     }
 
-    private:
-    SDL_Rect _box;
-    int _empty_pixels;
+    protected:
+
+    int _spacing;
+    double _box_len;
+    double _box_num;
+    SDL_Rect _outer_box;
 };
 
-struct v_layout
+struct v_layout : base_layout
 {
-    v_layout(unsigned int n, unsigned int percent_per_box, SDL_Rect const & outer_box, bool pad_x = false)
+    v_layout(unsigned int n, unsigned int spacing, SDL_Rect const & outer_box)
+        : base_layout(n, spacing, outer_box, outer_box.h)
     {
-        _box.h = percent_per_box * outer_box.h / 100;
-        _empty_pixels = (outer_box.h - _box.h * n) / (n + 1);
-        _box.y = _empty_pixels + outer_box.y;
-
-        int const padding = pad_x ? _empty_pixels : 0;
-        _box.x = outer_box.x + padding;
-        _box.w = outer_box.w - 2 * padding;
     }
 
-    SDL_Rect box()
+    SDL_Rect box(int n = 1)
     {
-        return _box;
-    }
-
-    SDL_Rect box(int n)
-    {
-        SDL_Rect res { _box.x, _box.y, _box.w, _box.h * n + _empty_pixels * (n - 1) };
+        int const h = static_cast<int>(_box_len * n) + _spacing * (n - 1);
+        int const y = _outer_box.y + _box_num * (_box_len + _spacing);
+        SDL_Rect res { _outer_box.x, y, _outer_box.w, h };
         return res;
     }
+};
 
-    void next(int n = 1)
+struct h_layout : base_layout
+{
+    h_layout(unsigned int n, unsigned int spacing, SDL_Rect const & outer_box)
+        : base_layout(n, spacing, outer_box, outer_box.w)
     {
-        _box.y += n * (_empty_pixels + _box.h);
     }
 
-    private:
-    SDL_Rect _box;
-    int _empty_pixels;
+    SDL_Rect box(int n = 1)
+    {
+        int const w = static_cast<int>(_box_len * n) + _spacing * (n - 1);
+        int const x = _outer_box.x + _box_num * (_box_len + _spacing);
+        SDL_Rect res { x, _outer_box.y, w, _outer_box.h };
+        return res;
+    }
 };
+
+SDL_Rect pad_box(SDL_Rect box, int padding)
+{
+    return { box.x + padding, box.y + padding, box.w - 2 * padding, box.h - 2 * padding };
+}
 
 enum quit_action
 {
@@ -873,22 +863,27 @@ int main(int argc, char * argv[])
 
                     apply_sdl_event(ev, gei);
 
-                    // global buttons
-                    std::array<std::function<void()>, 6> global_button_functions 
-                        { [&](){ current_view = cycle_view_type(current_view); view_dirty = true; }
-                        , [&](){ mpdc.toggle_pause(); }
-                        , [&](){ mpdc.set_random(!random); }
-                        , [](){ std::cout << "unused a" << std::endl; }
-                        , [](){ std::cout << "unused b" << std::endl; }
-                        , [](){ std::cout << "unused c" << std::endl; }
-                        };
-                    std::array<char const * const, 6> global_button_labels { "M", "P", "R", "-", "-", "-" };
-                    for (int i = 0; i < 6; i++)
                     {
-                        SDL_Rect button_rect = {0, i * 40, 40, 40};
-                        if (text_button(button_rect, global_button_labels[i], fa, gc))
-                            global_button_functions[i]();
-                        SDL_UpdateWindowSurfaceRects(window, &button_rect, 1);
+                        // global buttons
+                        std::array<std::function<void()>, 6> global_button_functions 
+                            { [&](){ current_view = cycle_view_type(current_view); view_dirty = true; }
+                            , [&](){ mpdc.toggle_pause(); }
+                            , [&](){ mpdc.set_random(!random); }
+                            , [](){ std::cout << "unused a" << std::endl; }
+                            , [](){ std::cout << "unused b" << std::endl; }
+                            , [](){ std::cout << "unused c" << std::endl; }
+                            };
+                        std::array<char const * const, 6> global_button_labels { "M", "P", "R", "-", "-", "-" };
+                        SDL_Rect buttons_rect {0, 0, 40, screen->h};
+                        gc.draw_background(buttons_rect);
+                        v_layout l(6, 4, pad_box(buttons_rect, 2));
+                        for (int i = 0; i < 6; i++)
+                        {
+                            if (text_button(l.box(), global_button_labels[i], fa, gc))
+                                global_button_functions[i]();
+                            l.next();
+                        }
+                        SDL_UpdateWindowSurfaceRects(window, &buttons_rect, 1);
                     }
 
                     SDL_Rect const view_rect = {40, 0, screen->w - 40, screen->h};
@@ -941,7 +936,7 @@ int main(int argc, char * argv[])
                             gc.draw_background(view_rect);
                             //SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
 
-                            v_layout l(2, 33, view_rect, true);
+                            v_layout l(2, 40, pad_box(view_rect, 40));
 
                             if (text_button(l.box(), "Shutdown", fa, gc))
                             {
@@ -959,7 +954,7 @@ int main(int argc, char * argv[])
                         {
                             gc.draw_background(view_rect);
 
-                            v_layout vl(6, 15, view_rect, true);
+                            v_layout vl(6, 4, pad_box(view_rect, 2));
                             auto top_box = vl.box(5);
                             vl.next(5);
 
@@ -968,7 +963,7 @@ int main(int argc, char * argv[])
                             if (current_view == view_type::PLAYLIST)
                             {
 
-                                h_layout hl(3, 30, vl.box());
+                                h_layout hl(3, 2, vl.box());
 
                                 if (text_button(hl.box(), "Jump", fa, gc))
                                     cpl_view_pos = current_song_pos >= 5 ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - item_skip)) : 0;
@@ -989,7 +984,7 @@ int main(int argc, char * argv[])
                             {
                                 if (present_search_results)
                                 {
-                                    h_layout hl(3, 30, vl.box());
+                                    h_layout hl(3, 2, vl.box());
                                     if (text_button(hl.box(), "Back", fa, gc))
                                     {
                                         search_items.clear();
@@ -1015,7 +1010,7 @@ int main(int argc, char * argv[])
                                 }
                                 else
                                 {
-                                    v_layout vl(6, 15, view_rect);
+                                    v_layout vl(6, 2, pad_box(view_rect, 2));
 
                                     auto top_box = vl.box();
 
@@ -1030,7 +1025,7 @@ int main(int argc, char * argv[])
                                     vl.next();
                                     for (char const * row_ptr : letters)
                                     {
-                                        h_layout hl(6, 15, vl.box());
+                                        h_layout hl(6, 2, vl.box());
                                         while (*row_ptr != 0)
                                         {
                                             bool line_finished = false;
@@ -1056,7 +1051,7 @@ int main(int argc, char * argv[])
 
                                     // render controls (such that a redraw is not necessary)
                                     {
-                                        h_layout hl(6, 15, top_box);
+                                        h_layout hl(6, 2, top_box);
 
                                         auto search_term_box = hl.box(5);
 
