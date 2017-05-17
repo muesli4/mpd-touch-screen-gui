@@ -428,7 +428,7 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
         if (gei.ydiff < 0)
             pos = dec_ensure_lower(next_pos, pos, 0);
         else
-            pos = inc_ensure_upper(next_pos, pos, entries.size() - 10);
+            pos = inc_ensure_upper(next_pos, pos, entries.size() < 10 ? 0 : entries.size() - 10);
     }
 
     std::size_t n = pos;
@@ -459,6 +459,19 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
         // TODO space ? font line skip?
         text_box.y += text_box.h;
         n++;
+    }
+
+    if (entries.size() > 10)
+    {
+        // draw position indicator
+        SDL_SetRenderDrawBlendMode(gc.renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(gc.renderer, 250, 150, 150, 200);
+        int const ind_len = 10;
+        int const ind_w = 7;
+
+        SDL_Rect ind_rect { box.x + box.w - ind_w - 1, box.y + ((box.h - ind_len) * pos) / entries.size(), ind_w, ind_len};
+        SDL_RenderFillRect(gc.renderer, &ind_rect);
+        SDL_SetRenderDrawBlendMode(gc.renderer, SDL_BLENDMODE_NONE);
     }
 
     return swipe ? -1 : selection;
@@ -918,7 +931,7 @@ int main(int argc, char * argv[])
                                 cpl_view_pos = dec_ensure_lower(cpl_view_pos - 10, cpl_view_pos, 0);
                             hl.next();
                             if (text_button(hl.box(), "Down", fa, gc))
-                                cpl_view_pos = inc_ensure_upper(cpl_view_pos + 10, cpl_view_pos, cpl.size() - 10);
+                                cpl_view_pos = inc_ensure_upper(cpl_view_pos + 10, cpl_view_pos, cpl.size() < 10 ? 0 : cpl.size() - 10);
 
                             int selection = list_view(top_box, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
                             if (selection != -1)
@@ -953,7 +966,7 @@ int main(int argc, char * argv[])
                                 hl.next();
                                 if (text_button(hl.box(), "Down", fa, gc))
                                     // TODO Down works with small result
-                                    search_items_view_pos = inc_ensure_upper(search_items_view_pos + 10, search_items_view_pos, search_items.size() - 10);
+                                    search_items_view_pos = inc_ensure_upper(search_items_view_pos + 10, search_items_view_pos, search_items.size() < 10 ? 0 : search_items.size() - 10);
 
                                 int selection = list_view(top_box, search_items, search_items_view_pos, -1, fa_small, gc);
 
