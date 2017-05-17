@@ -44,11 +44,17 @@
 char const * const BASE_DIR = "/home/moritz/Musik/";
 char const * const SHUTDOWN_CMD = "echo Shutting down";
 char const * const REBOOT_CMD = "echo Rebooting";
+char const * const DIM_CMD = "echo dimming";
+char const * const UNDIM_CMD = "echo undimming";
 #else
 char const * const BASE_DIR = "/mnt/music/library/";
 char const * const SHUTDOWN_CMD = "sudo poweroff";
 char const * const REBOOT_CMD = "sudo reboot";
+char const * const DIM_CMD = "display-pwm.sh 1024";
+char const * const UNDIM_CMD = "display-pwm.sh 0";
 #endif
+
+unsigned int const IDLE_TIMER_DELAY_MS = 60000;
 
 // determines the minimum length of a swipe
 unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
@@ -136,14 +142,13 @@ SDL_Surface * create_cover_replacement(SDL_Surface const * s, SDL_Rect brect, fo
     {
         if (!line.empty())
         {
-            SDL_Surface * text_surface = fa.text(line);
+            auto text_surface_ptr = fa.text(line);
 
-            if (text_surface != 0)
+            if (text_surface_ptr)
             {
-                SDL_Rect r = { 20, y_offset, text_surface->w, text_surface->h };
-                SDL_BlitSurface(text_surface, 0, target_surface, &r);
-                y_offset += text_surface->h + 10;
-                //SDL_FreeSurface(text_surface);
+                SDL_Rect r = { 20, y_offset, text_surface_ptr->w, text_surface_ptr->h };
+                SDL_BlitSurface(text_surface_ptr.get(), 0, target_surface, &r);
+                y_offset += text_surface_ptr->h + 10;
             }
         }
     }
@@ -199,12 +204,12 @@ struct gui_event_info
     bool mouse_event;
     bool pressed;
 
-    int x;
-    int y;
+    int event_x;
+    int event_y;
 
 
-    int last_x;
-    int last_y;
+    int down_x;
+    int down_y;
 
     bool valid_swipe;
     std::chrono::steady_clock::time_point up_time_point;
@@ -223,22 +228,23 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei)
     {
         gei.mouse_event = true;
         gei.pressed = true;
-        gei.x = e.button.x;
-        gei.y = e.button.y;
+        gei.event_x = e.button.x;
+        gei.event_y = e.button.y;
         gei.valid_swipe = false;
     }
     else if (e.type == SDL_MOUSEBUTTONUP)
     {
         gei.mouse_event = true;
         gei.pressed = false;
-        gei.last_x = gei.x;
-        gei.last_y = gei.y;
-        gei.x = e.button.x;
-        gei.y = e.button.y;
+        gei.down_x = gei.event_x;
+        gei.down_y = gei.event_y;
+        gei.event_x = e.button.x;
+        gei.event_y = e.button.y;
 
+        // FIXME use SDL timestamps? this may be 100ms off
         gei.up_time_point = std::chrono::steady_clock::now();
-        gei.xdiff = gei.x - gei.last_x;
-        gei.ydiff = gei.y - gei.last_y;
+        gei.xdiff = gei.event_x - gei.down_x;
+        gei.ydiff = gei.event_y - gei.down_y;
         gei.abs_xdiff = std::abs(gei.xdiff);
         gei.abs_ydiff = std::abs(gei.ydiff);
         gei.valid_swipe = gei.abs_xdiff > SWIPE_THRESHOLD_LOW_X || gei.abs_ydiff > SWIPE_THRESHOLD_LOW_Y;
@@ -269,13 +275,13 @@ bool within_rect(int x, int y, SDL_Rect const & r)
 bool pressed_and_released_in(SDL_Rect box, gui_event_info const & gei)
 {
     // both clicks lie within box
-    return !gei.pressed && within_rect(gei.x, gei.y, box) && within_rect(gei.last_x, gei.last_y, box);
+    return !gei.pressed && within_rect(gei.event_x, gei.event_y, box) && within_rect(gei.down_x, gei.down_y, box);
     // TODO check whether the previous one was a mouse down event
 }
 
 bool pressed_in(SDL_Rect box, gui_event_info const & gei)
 {
-    return gei.pressed && within_rect(gei.x, gei.y, box);
+    return gei.pressed && within_rect(gei.event_x, gei.event_y, box);
 }
 
 bool is_button_active(SDL_Rect box, gui_event_info const & gei)
@@ -320,11 +326,11 @@ struct gui_context
 
     void draw_button_text(SDL_Rect box, std::string const & text, font_atlas & fa)
     {
-        SDL_Surface * text_surf = fa.text(text);
-        SDL_SetSurfaceColorMod(text_surf, button_fg_color.r, button_fg_color.g, button_fg_color.b);
+        auto text_surf_ptr = fa.text(text);
+        SDL_SetSurfaceColorMod(text_surf_ptr.get(), button_fg_color.r, button_fg_color.g, button_fg_color.b);
         // center text in box
-        SDL_Rect target_rect = {box.x + (box.w - text_surf->w) / 2, box.y + (box.h - text_surf->h) / 2, text_surf->w, text_surf->h};
-        SDL_BlitSurface(text_surf, nullptr, target_surface, &target_rect);
+        SDL_Rect target_rect = {box.x + (box.w - text_surf_ptr->w) / 2, box.y + (box.h - text_surf_ptr->h) / 2, text_surf_ptr->w, text_surf_ptr->h};
+        SDL_BlitSurface(text_surf_ptr.get(), nullptr, target_surface, &target_rect);
     }
 
     void draw_entry_box(SDL_Rect box)
@@ -402,7 +408,6 @@ unsigned int dec_ensure_lower(unsigned int new_pos, unsigned int old_pos, unsign
     return new_pos > old_pos ? lower_bound : std::max(new_pos, lower_bound);
 }
 
-
 // for the moment only one highlight is supported, maybe more make sense later on
 int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned int & pos, int highlight, font_atlas & fa, gui_context & gc)
 {
@@ -413,9 +418,9 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
 
     gui_event_info const & gei = gc.gei;
 
-    bool const swipe = gei.valid_swipe && gei.mouse_event && within_rect(gei.last_x, gei.last_y, box) && !gei.pressed;
+    bool const swipe = gei.valid_swipe && gei.mouse_event && within_rect(gei.down_x, gei.down_y, box) && !gei.pressed;
     // hacky update before drawing...
-    if (swipe)
+    if (swipe && gei.abs_ydiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= gei.abs_xdiff)
     {
         // TODO
         unsigned int const distance = 100 * gei.ydiff / (box.w / 2);
@@ -436,18 +441,17 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
         if (highlight == static_cast<int>(n))
             gc.draw_entry_selected_background({text_box.x, text_box.y, text_box.w, h});
 
-        SDL_Surface * text_surf = fa.text(entries[n]);
+        auto text_surf_ptr = fa.text(entries[n]);
         if (pressed_in(text_box, gei))
         {
-            SDL_SetSurfaceColorMod(text_surf, 190, 80, 80);
+            SDL_SetSurfaceColorMod(text_surf_ptr.get(), 190, 80, 80);
         }
         else
         {
-            SDL_SetSurfaceColorMod(text_surf, 0, 0, 0);
+            SDL_SetSurfaceColorMod(text_surf_ptr.get(), 0, 0, 0);
         }
         SDL_Rect tmp_rect = text_box;
-        SDL_BlitSurface(text_surf, &src_rect, gc.target_surface, &tmp_rect);
-        //SDL_FreeSurface(text_surf);
+        SDL_BlitSurface(text_surf_ptr.get(), &src_rect, gc.target_surface, &tmp_rect);
 
         if (is_button_active(text_box, gei))
             selection = n;
@@ -473,7 +477,7 @@ enum class action
 
 action swipe_area(SDL_Rect const & box, gui_event_info const & gei)
 {
-    if (gei.mouse_event && within_rect(gei.last_x, gei.last_y, box) && !gei.pressed)
+    if (gei.mouse_event && within_rect(gei.down_x, gei.down_y, box) && !gei.pressed)
     {
         // swipe detection
         if (gei.valid_swipe)
@@ -554,6 +558,7 @@ enum class user_event
 {
     RANDOM_CHANGED,
     SONG_CHANGED,
+    TIMER_EXPIRED,
     REFRESH
 };
 
@@ -652,6 +657,13 @@ enum quit_action
     NONE
 };
 
+//Uint32 idle_timer_cb(Uint32 interval, void * user_event_type_ptr)
+//{
+//    std::cout << "timer executing " << interval << std::endl;
+//    push_user_event(*reinterpret_cast<uint32_t *>(user_event_type_ptr), user_event::TIMER_EXPIRED);
+//    return 0;
+//}
+
 int main(int argc, char * argv[])
 {
     // TODO move to config
@@ -662,7 +674,7 @@ int main(int argc, char * argv[])
     // allows swipes with multiple lines, as long as the time between them is below this TODO not implemented
     //unsigned int const TOUCH_DEBOUNCE_TIME_MS_THRESHOLD_MAX = 200;
 
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER);
     std::atexit(SDL_Quit);
 
     // determine screen size of display 0
@@ -715,6 +727,8 @@ int main(int argc, char * argv[])
 
     SDL_Surface * screen = SDL_GetWindowSurface(window);
 
+    //SDL_TimerID idle_timer;
+
     // loop state
     std::string current_song_path;
     bool random;
@@ -734,18 +748,18 @@ int main(int argc, char * argv[])
     bool has_cover = false;
 
     // TODO check for error?
-    uint32_t const change_event_type = SDL_RegisterEvents(1);
+    uint32_t const user_event_type = SDL_RegisterEvents(1);
 
     mpd_control mpdc(
         [&](std::string const & uri, unsigned int pos)
         {
-            push_user_event(change_event_type, user_event::SONG_CHANGED);
+            push_user_event(user_event_type, user_event::SONG_CHANGED);
             current_song_path = uri;
             current_song_pos = pos;
         },
         [&](bool value)
         {
-            push_change_event(change_event_type, user_event::RANDOM_CHANGED, random, value);
+            push_change_event(user_event_type, user_event::RANDOM_CHANGED, random, value);
         }
     );
 
@@ -785,12 +799,42 @@ int main(int argc, char * argv[])
                         )
                 {
 
-                    if (ev.type == SDL_USEREVENT && static_cast<user_event>(ev.user.code) == user_event::SONG_CHANGED)
+                    if (ev.type == SDL_USEREVENT)
                     {
-                        // TODO do not reset
-                        // if (has_cover && same album)
-                        cover_surface_ptr.reset();
+                        switch (static_cast<user_event>(ev.type))
+                        {
+                            case user_event::SONG_CHANGED:
+                                // TODO do not reset
+                                // if (has_cover && same album)
+                                cover_surface_ptr.reset();
+                                break;
+                            //case user_event::TIMER_EXPIRED:
+                            //    system(DIM_CMD);
+                            //    do
+                            //    {
+                            //        std::cout << "waiting for wakeup event" << std::endl;
+                            //        SDL_WaitEvent(&ev);
+                            //    } while (ev.type != SDL_MOUSEBUTTONDOWN || ev.type != SDL_MOUSEBUTTONUP);
+                            //    std::cout << "woke up" << std::endl;
+                            //    // ignore one event, turn on lights
+                            //    system(UNDIM_CMD);
+                            //    std::cout << "starting timer again" << std::endl;
+                            //    idle_timer = SDL_AddTimer(IDLE_TIMER_DELAY_MS, idle_timer_cb, reinterpret_cast<void *>(const_cast<uint32_t *>(&user_event_type)));
+
+                            //    // go back to polling for events
+                            //    continue;
+                                break;
+                            default:
+                                break;
+                        }
                     }
+                    else
+                    {
+                        //std::cout << "resetting timer" << std::endl;
+                        //SDL_RemoveTimer(idle_timer);
+                        //SDL_AddTimer(IDLE_TIMER_DELAY_MS, idle_timer_cb, reinterpret_cast<void *>(const_cast<uint32_t *>(&user_event_type)));
+                    }
+
 
                     apply_sdl_event(ev, gei);
 
@@ -901,7 +945,7 @@ int main(int argc, char * argv[])
                                     present_search_results = false;
 
                                     // necessary evil
-                                    push_user_event(change_event_type, user_event::REFRESH);
+                                    push_user_event(user_event_type, user_event::REFRESH);
                                 }
                                 hl.next();
                                 if (text_button(hl.box(), "Up", fa, gc))
@@ -989,7 +1033,7 @@ int main(int argc, char * argv[])
                                         search_items_view_pos = 0;
 
                                         // necessary evil
-                                        push_user_event(change_event_type, user_event::REFRESH);
+                                        push_user_event(user_event_type, user_event::REFRESH);
                                     }
 
                                 }

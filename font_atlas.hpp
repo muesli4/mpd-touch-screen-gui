@@ -3,6 +3,7 @@
 
 #include <stdexcept>
 #include <unordered_map>
+#include <memory>
 
 #include <SDL2/SDL_ttf.h>
 
@@ -15,8 +16,7 @@ struct font_atlas
 {
     font_atlas(std::string font_path, int ptsize);
     ~font_atlas();
-
-    SDL_Surface * text(std::string);
+    std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> text(std::string);
 
     unsigned int height();
 
@@ -27,6 +27,7 @@ struct font_atlas
     std::unordered_map<std::string, SDL_Surface *> _prerendered;
     TTF_Font * _font;
     int _space_advance;
+    int _space_minx;
 };
 
 #endif

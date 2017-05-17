@@ -15,11 +15,8 @@ font_atlas::font_atlas(std::string font_path, int ptsize)
     if (_font == nullptr)
         throw font_not_found(TTF_GetError());
 
-    TTF_GlyphMetrics(_font, ' ', nullptr, nullptr, nullptr, nullptr, &_space_advance);
-
-    //std::cout << "a = " << TTF_GetFontKerningSizeGlyphs(_font, '.', ' ')
-    //          << "\nb = " << TTF_GetFontKerningSizeGlyphs(_font, ' ', 'J')
-    //          << "\nc = " << TTF_GetFontKerningSizeGlyphs(_font, '.', 'J') << std::endl;
+    // cache join point metrics
+    TTF_GlyphMetrics(_font, ' ', &_space_minx, nullptr, nullptr, nullptr, &_space_advance);
 }
 
 font_atlas::~font_atlas()
@@ -30,7 +27,6 @@ font_atlas::~font_atlas()
         SDL_FreeSurface(p.second);
 }
 
-/*
 // http://stackoverflow.com/questions/18534494/convert-from-utf-8-to-unicode-c
 #include <deque>
 uint32_t utf8_to_ucs4(std::deque<uint8_t> coded)
@@ -61,14 +57,21 @@ uint32_t utf8_to_ucs4(std::deque<uint8_t> coded)
     return charcode;
 }
 
+bool is_following_byte(uint8_t b)
+{
+    // following bytes have most significant bit set and 2nd most significant
+    // bit cleared
+    return (b & 0b10000000) && !(b & 0b01000000);
+}
+
+// get the last utf8 character from a string
 uint32_t get_last_ucs4(std::string s)
 {
     char const * ptr = s.c_str() + s.size() - 1;
     if (*ptr == 0) ptr = " ";
 
     std::deque<uint8_t> d;
-    // starting byte has highest bit set
-    while (*ptr & 0b10000000)
+    while (is_following_byte(*ptr))
     {
         d.push_front(*ptr);
         ptr--;
@@ -85,97 +88,92 @@ uint32_t get_first_ucs4(std::string s)
     std::deque<uint8_t> d;
     d.push_back(*ptr);
     ptr++;
-    while (*ptr & 0b10000000)
+    while (is_following_byte(*ptr))
     {
         d.push_back(*ptr);
         ptr++;
     }
     return utf8_to_ucs4(d);
 }
-*/
 
-SDL_Surface * font_atlas::text(std::string t)
+std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> font_atlas::text(std::string t)
 {
-    return word(t);
-    /*
+    SDL_Surface * result;
+
     if (t.empty())
     {
-        return SDL_CreateRGBSurfaceWithFormat(0, 0, 0, 32, SDL_PIXELFORMAT_RGBA32);
+        result = SDL_CreateRGBSurfaceWithFormat(0, 0, height(), 32, SDL_PIXELFORMAT_RGBA32);
     }
-    std::vector<std::string> words;
-
-    std::size_t pos;
-    std::size_t last_pos = 0;
-    while ((pos = t.find(' ', last_pos)) != std::string::npos)
+    else
     {
-        words.push_back(t.substr(last_pos, pos - last_pos));
-        last_pos = pos + 1;
+        std::vector<std::string> words;
+
+        std::size_t pos;
+        std::size_t last_pos = 0;
+        while ((pos = t.find(' ', last_pos)) != std::string::npos)
+        {
+            words.push_back(t.substr(last_pos, pos - last_pos));
+            last_pos = pos + 1;
+        }
+        words.push_back(t.substr(last_pos));
+
+        int width = 0;
+        std::vector<SDL_Surface *> surfaces;
+
+        for (auto const & w : words)
+        {
+            // FIXME how to handle double spaces in text?
+            SDL_Surface * s = word(w.empty() ? " " : w);
+            surfaces.push_back(s);
+            width += s->w;
+        }
+
+        std::vector<int> spaces;
+        spaces.push_back(0);
+        for (std::size_t n = 0; n + 1 < words.size(); n++)
+        {
+            // use proper kerning with space
+            int const left_kerning = TTF_GetFontKerningSizeGlyphs(_font, get_last_ucs4(words[n]), ' ');
+            int const right_kerning = TTF_GetFontKerningSizeGlyphs(_font, ' ', get_last_ucs4(words[n + 1]));
+            int const join_width = (_space_minx < 0 ? -_space_minx : 0) + _space_advance + left_kerning + right_kerning;
+            width += join_width;
+            spaces.push_back(join_width);
+            //std::cout << "word[" << n << "] = \"" << words[n]
+            //          << "\",  with join_width " << left_kerning << " + " << _space_advance << " + " << right_kerning
+            //          << ", minx = " << minx
+            //          << ", maxx = " << maxx
+            //          << std::endl;
+            //std::wcout << L"    chars in question '" << (wchar_t) get_last_ucs4(words[n]) << L"' and '" << (wchar_t) get_first_ucs4(words[n + 1]) << L"'" << std::endl;
+        }
+        //std::cout << "spaces" << std::endl;
+
+        // TODO move and use create_similar_surface
+        result = SDL_CreateRGBSurfaceWithFormat(0, width, height(), 32, SDL_PIXELFORMAT_RGBA32);
+
+        int x = 0;
+        for (std::size_t n = 0; n < surfaces.size(); n++)
+        {
+            SDL_Surface * s = surfaces[n];
+
+            // use no alpha blending for source, completely overwrite the target, including alpha channel
+            SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);
+
+            x += spaces[n];
+            SDL_Rect r {x, 0, s->w, s->h};
+            SDL_BlitSurface(s, nullptr, result, &r);
+            x += s->w;
+        }
+
+        // use alpha blending supplied by the blitted surfaces' alpha channel
+        SDL_SetSurfaceBlendMode(result, SDL_BLENDMODE_BLEND);
     }
-    words.push_back(t.substr(last_pos));
-
-    //std::cout << "words" << std::endl;
-
-    int width = 0;
-    std::vector<SDL_Surface *> surfaces;
-
-    for (auto const & w : words)
-    {
-        // FIXME: Why does TTF_RenderUTF8_Blended return nullptr for ""?
-        SDL_Surface * s = word(w.empty() ? " " : w);
-
-        SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_BLEND);
-        surfaces.push_back(s);
-        width += s->w;
-    }
-    //std::cout << "surfaces" << std::endl;
-
-    std::vector<int> spaces;
-    spaces.push_back(0);
-    for (std::size_t n = 0; n + 1 < words.size(); n++)
-    {
-        int minx;
-        int maxx;
-        TTF_GlyphMetrics(_font, ' ', &minx, &maxx, nullptr, nullptr, nullptr);
-        int const left_kerning = TTF_GetFontKerningSizeGlyphs(_font, get_last_ucs4(words[n]), get_first_ucs4(" "));
-        int const right_kerning = TTF_GetFontKerningSizeGlyphs(_font, get_first_ucs4(" "), get_last_ucs4(words[n + 1]));
-        int const instant_kerning = TTF_GetFontKerningSizeGlyphs(_font, get_first_ucs4(words[n]), get_last_ucs4(words[n + 1]));
-        int const space = 4 + instant_kerning;
-        width += space;
-        spaces.push_back(space);
-        //std::cout << "word[" << n << "] = \"" << words[n]
-        //          << "\",  with space " << left_kerning << " + " << _space_advance << " + " << right_kerning
-        //          << ", instant kerning = " << instant_kerning
-        //          << ", minx = " << minx
-        //          << ", maxx = " << maxx
-        //          << std::endl;
-    }
-    //std::cout << "spaces" << std::endl;
-
-    // TODO empty surface?
-    //SDL_Surface * result = SDL_CreateRGBSurfaceWithFormat(0, width, height(), surfaces[0]->format->BitsPerPixel, surfaces[0]->format->format);
-    SDL_Surface * result = SDL_CreateRGBSurfaceWithFormat(0, width, height(), 32, SDL_PIXELFORMAT_RGBA32);
-    SDL_SetSurfaceBlendMode(result, SDL_BLENDMODE_NONE);
-
-    int x = 0;
-    for (std::size_t n = 0; n < surfaces.size(); n++)
-    {
-        SDL_Surface * s = surfaces[n];
-        x += spaces[n];
-        SDL_Rect r {x, 0, s->w, s->h};
-        SDL_BlitSurface(s, nullptr, result, &r);
-        x += s->w;
-    }
-    //std::cout << "blitting" << std::endl;
-
-    SDL_SetSurfaceBlendMode(result, SDL_BLENDMODE_BLEND);
-    return result;
-    */
+    return std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)>(result, [](SDL_Surface * s){ SDL_FreeSurface(s); });
 }
 
 SDL_Surface * font_atlas::word(std::string w)
 {
-    // FIXME: temporary solution - do not use too much memory
-    if (_prerendered.size() > 20000) _prerendered.clear();
+    // FIXME: temporary solution - do not use too much memory, although with words caching it's not as bad as before
+    if (_prerendered.size() > 40000) _prerendered.clear();
 
     auto it = _prerendered.find(w);
     if (it == _prerendered.end())
