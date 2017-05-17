@@ -302,6 +302,7 @@ struct gui_context
         , entry_frame_color{100, 100, 100}
         , entry_selected_bg_color{250, 200, 200}
         , bg_color{250, 250, 250}
+        , active_color{230, 230, 255}
     {
         renderer = SDL_CreateSoftwareRenderer(s);
     }
@@ -347,10 +348,25 @@ struct gui_context
         SDL_RenderFillRect(renderer, &box);
     }
 
-    void draw_entry_selected_background(SDL_Rect box)
+    void draw_entry_pressed_background(SDL_Rect box)
     {
         set_color(entry_selected_bg_color);
         SDL_RenderFillRect(renderer, &box);
+    }
+
+    void draw_entry_active_background(SDL_Rect box)
+    {
+        set_color(active_color);
+        SDL_RenderFillRect(renderer, &box);
+    }
+
+    void draw_entry_position_indicator(SDL_Rect box)
+    {
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 150, 250, 150, 200);
+
+        SDL_RenderFillRect(renderer, &box);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
     }
 
     gui_event_info const & gei;
@@ -371,6 +387,9 @@ struct gui_context
     SDL_Color entry_frame_color;
     SDL_Color entry_selected_bg_color;
     SDL_Color bg_color;
+
+    // displays the status of something, but not related to direct user interaction
+    SDL_Color active_color;
 };
 
 bool text_button( SDL_Rect box
@@ -411,6 +430,10 @@ unsigned int dec_ensure_lower(unsigned int new_pos, unsigned int old_pos, unsign
 // for the moment only one highlight is supported, maybe more make sense later on
 int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned int & pos, int highlight, font_atlas & fa, gui_context & gc)
 {
+    // TODO replace 10 with number of actually displayed items
+
+    int const visible_items = (box.h - 2) / fa.font_line_skip();
+
     int selection = -1;
     gc.draw_entry_box(box);
 
@@ -422,13 +445,12 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
     // hacky update before drawing...
     if (swipe && gei.abs_ydiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= gei.abs_xdiff)
     {
-        // TODO
-        unsigned int const distance = 100 * gei.ydiff / (box.w / 2);
+        unsigned int const distance = visible_items * 10 * gei.ydiff / (box.w / 2);
         unsigned int const next_pos = pos + distance;
         if (gei.ydiff < 0)
             pos = dec_ensure_lower(next_pos, pos, 0);
         else
-            pos = inc_ensure_upper(next_pos, pos, entries.size() < 10 ? 0 : entries.size() - 10);
+            pos = inc_ensure_upper(next_pos, pos, entries.size() < visible_items ? 0 : entries.size() - visible_items);
     }
 
     std::size_t n = pos;
@@ -438,40 +460,35 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
         int const h = text_box.h - (overlap < 0 ? 0 : overlap) - 1;
 
         SDL_Rect src_rect { 0, 0, text_box.w, h };
-        if (highlight == static_cast<int>(n))
-            gc.draw_entry_selected_background({text_box.x, text_box.y, text_box.w, h});
+        SDL_Rect abs_rect {text_box.x, text_box.y, text_box.w, h};
+
+        // favor pressed over active
+        if (pressed_in(text_box, gei))
+            gc.draw_entry_pressed_background(abs_rect);
+        else if (highlight == static_cast<int>(n))
+            gc.draw_entry_active_background(abs_rect);
 
         auto text_surf_ptr = fa.text(entries[n]);
-        if (pressed_in(text_box, gei))
-        {
-            SDL_SetSurfaceColorMod(text_surf_ptr.get(), 190, 80, 80);
-        }
-        else
-        {
-            SDL_SetSurfaceColorMod(text_surf_ptr.get(), 0, 0, 0);
-        }
+        SDL_SetSurfaceColorMod(text_surf_ptr.get(), 0, 0, 0);
+
         SDL_Rect tmp_rect = text_box;
         SDL_BlitSurface(text_surf_ptr.get(), &src_rect, gc.target_surface, &tmp_rect);
 
         if (is_button_active(text_box, gei))
             selection = n;
 
-        // TODO space ? font line skip?
-        text_box.y += text_box.h;
+        text_box.y += fa.font_line_skip();
         n++;
     }
 
-    if (entries.size() > 10)
+    // draw position indicator if it doesn't fit on one page
+    if (entries.size() > visible_items)
     {
-        // draw position indicator
-        SDL_SetRenderDrawBlendMode(gc.renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(gc.renderer, 250, 150, 150, 200);
-        int const ind_len = 10;
+        int const ind_len = std::max(15, ((box.h - 2) * visible_items) / static_cast<int>(entries.size()));
         int const ind_w = 7;
-
-        SDL_Rect ind_rect { box.x + box.w - ind_w - 1, box.y + ((box.h - ind_len) * pos) / entries.size(), ind_w, ind_len};
-        SDL_RenderFillRect(gc.renderer, &ind_rect);
-        SDL_SetRenderDrawBlendMode(gc.renderer, SDL_BLENDMODE_NONE);
+        int const ind_y = box.y + 1 + (box.h * pos) / entries.size();
+        SDL_Rect ind_rect { box.x + box.w - ind_w - 1, ind_y, ind_w, ind_len};
+        gc.draw_entry_position_indicator(ind_rect);
     }
 
     return swipe ? -1 : selection;
