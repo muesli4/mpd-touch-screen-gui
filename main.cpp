@@ -60,7 +60,7 @@ unsigned int const IDLE_TIMER_DELAY_MS = 60000;
 unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
 unsigned int const SWIPE_THRESHOLD_LOW_Y = SWIPE_THRESHOLD_LOW_X;
 
-// determines how ambiguous a swipe has to be
+// determines how unambiguous a swipe has to be to count as either horizontal or vertical
 double const DIR_UNAMBIG_FACTOR_THRESHOLD = 0.3;
 
 // the time to wait after a swipe, before allowing touch events
@@ -448,7 +448,7 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
     // hacky update before drawing...
     if (swipe && gei.abs_ydiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= gei.abs_xdiff)
     {
-        unsigned int const distance = visible_items * 10 * gei.ydiff / (box.w / 2);
+        int const distance = static_cast<int>(visible_items) * 10 * gei.ydiff / (box.w / 2);
         unsigned int const next_pos = pos + distance;
         if (gei.ydiff < 0)
             pos = dec_ensure_lower(next_pos, pos, 0);
@@ -873,10 +873,10 @@ int main(int argc, char * argv[])
                             , [](){ std::cout << "unused b" << std::endl; }
                             , [](){ std::cout << "unused c" << std::endl; }
                             };
-                        std::array<char const * const, 6> global_button_labels { "M", "P", "R", "-", "-", "-" };
+                        std::array<char const * const, 6> global_button_labels { "♫", "P", "R", "-", "-", "-" };
                         SDL_Rect buttons_rect {0, 0, 40, screen->h};
                         gc.draw_background(buttons_rect);
-                        v_layout l(6, 4, pad_box(buttons_rect, 2));
+                        v_layout l(6, 4, pad_box(buttons_rect, 4));
                         for (int i = 0; i < 6; i++)
                         {
                             if (text_button(l.box(), global_button_labels[i], fa, gc))
@@ -954,7 +954,7 @@ int main(int argc, char * argv[])
                         {
                             gc.draw_background(view_rect);
 
-                            v_layout vl(6, 4, pad_box(view_rect, 2));
+                            v_layout vl(6, 4, pad_box(view_rect, 4));
                             auto top_box = vl.box(5);
                             vl.next(5);
 
@@ -963,7 +963,7 @@ int main(int argc, char * argv[])
                             if (current_view == view_type::PLAYLIST)
                             {
 
-                                h_layout hl(3, 2, vl.box());
+                                h_layout hl(3, 4, vl.box());
 
                                 if (text_button(hl.box(), "Jump", fa, gc))
                                     cpl_view_pos = current_song_pos >= 5 ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - item_skip)) : 0;
@@ -984,7 +984,7 @@ int main(int argc, char * argv[])
                             {
                                 if (present_search_results)
                                 {
-                                    h_layout hl(3, 2, vl.box());
+                                    h_layout hl(3, 4, vl.box());
                                     if (text_button(hl.box(), "Back", fa, gc))
                                     {
                                         search_items.clear();
@@ -1010,7 +1010,7 @@ int main(int argc, char * argv[])
                                 }
                                 else
                                 {
-                                    v_layout vl(6, 2, pad_box(view_rect, 2));
+                                    v_layout vl(6, 4, pad_box(view_rect, 2));
 
                                     auto top_box = vl.box();
 
@@ -1025,7 +1025,7 @@ int main(int argc, char * argv[])
                                     vl.next();
                                     for (char const * row_ptr : letters)
                                     {
-                                        h_layout hl(6, 2, vl.box());
+                                        h_layout hl(6, 4, vl.box());
                                         while (*row_ptr != 0)
                                         {
                                             bool line_finished = false;
@@ -1051,7 +1051,7 @@ int main(int argc, char * argv[])
 
                                     // render controls (such that a redraw is not necessary)
                                     {
-                                        h_layout hl(6, 2, top_box);
+                                        h_layout hl(6, 4, top_box);
 
                                         auto search_term_box = hl.box(5);
 
