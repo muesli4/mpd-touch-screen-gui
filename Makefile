@@ -24,3 +24,7 @@ replace: main
 	systemctl --user stop startx
 	sudo cp main /usr/local/bin/cover
 	systemctl --user start startx
+
+clean:
+	rm *.o
+	rm main
