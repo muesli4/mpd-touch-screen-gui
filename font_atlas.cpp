@@ -190,3 +190,8 @@ unsigned int font_atlas::height()
 {
     return TTF_FontHeight(_font);
 }
+
+int font_atlas::font_line_skip()
+{
+    return TTF_FontLineSkip(_font);
+}

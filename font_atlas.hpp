@@ -20,6 +20,8 @@ struct font_atlas
 
     unsigned int height();
 
+    int font_line_skip();
+
     private:
 
     SDL_Surface * word(std::string);
