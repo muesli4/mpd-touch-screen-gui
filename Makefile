@@ -8,11 +8,14 @@ LDFLAGS  = -lpthread `pkg-config --libs $(LIBS)`
 OBJ      = main.o mpd_control.o util.o timed_thread.o font_atlas.o
 
 debug: CXXFLAGS += '-ggdb'
+opt:   CXXFLAGS += '-O2'
 
 main: $(OBJ)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJ) -o main
 
 debug: main
+
+opt: main
 
 %.o: %.c
 	$(CXX) $(CXXFLAGS) -c $<
