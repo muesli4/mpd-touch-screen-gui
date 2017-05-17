@@ -427,15 +427,19 @@ unsigned int dec_ensure_lower(unsigned int new_pos, unsigned int old_pos, unsign
     return new_pos > old_pos ? lower_bound : std::max(new_pos, lower_bound);
 }
 
+unsigned int list_view_visible_items(SDL_Rect box, font_atlas & fa)
+{
+    return (box.h - 2) / fa.font_line_skip();
+}
+
 // for the moment only one highlight is supported, maybe more make sense later on
 int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned int & pos, int highlight, font_atlas & fa, gui_context & gc)
 {
-    // TODO replace 10 with number of actually displayed items
-
-    int const visible_items = (box.h - 2) / fa.font_line_skip();
+    unsigned int const visible_items = list_view_visible_items(box, fa);
 
     int selection = -1;
     gc.draw_entry_box(box);
+
 
     SDL_Rect text_box { box.x + 1, box.y + 1, box.w - 2, static_cast<int>(fa.height()) };
 
@@ -484,9 +488,10 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
     // draw position indicator if it doesn't fit on one page
     if (entries.size() > visible_items)
     {
-        int const ind_len = std::max(15, ((box.h - 2) * visible_items) / static_cast<int>(entries.size()));
+        int const ind_len = std::max(15, static_cast<int>(((box.h - 2) * visible_items) / entries.size()));
         int const ind_w = 7;
-        int const ind_y = box.y + 1 + (box.h * pos) / entries.size();
+
+        int const ind_y = box.y + 1 + ((box.h - 2 - ind_len) * pos) / (entries.size() - visible_items);
         SDL_Rect ind_rect { box.x + box.w - ind_w - 1, ind_y, ind_w, ind_len};
         gc.draw_entry_position_indicator(ind_rect);
     }
@@ -931,145 +936,7 @@ int main(int argc, char * argv[])
                     }
                     else
                     {
-                        if (current_view == view_type::PLAYLIST)
-                        {
-                            gc.draw_background(view_rect);
-
-                            v_layout vl(6, 15, view_rect, true);
-                            auto top_box = vl.box(5);
-                            vl.next(5);
-
-                            h_layout hl(3, 30, vl.box());
-
-                            if (text_button(hl.box(), "Jump", fa, gc))
-                                cpl_view_pos = current_song_pos >= 5 ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - 10)) : 0;
-                            hl.next();
-                            if (text_button(hl.box(), "Up", fa, gc))
-                                cpl_view_pos = dec_ensure_lower(cpl_view_pos - 10, cpl_view_pos, 0);
-                            hl.next();
-                            if (text_button(hl.box(), "Down", fa, gc))
-                                cpl_view_pos = inc_ensure_upper(cpl_view_pos + 10, cpl_view_pos, cpl.size() < 10 ? 0 : cpl.size() - 10);
-
-                            int selection = list_view(top_box, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
-                            if (selection != -1)
-                                mpdc.play_position(selection);
-
-                            // TODO calculcate from text height (font ascent)
-                        }
-                        else if (current_view == view_type::SONG_SEARCH)
-                        {
-                            gc.draw_background(view_rect);
-
-                            if (present_search_results)
-                            {
-                                v_layout vl(6, 15, view_rect, true);
-                                auto top_box = vl.box(5);
-                                vl.next(5);
-
-                                h_layout hl(3, 30, vl.box());
-                                if (text_button(hl.box(), "Back", fa, gc))
-                                {
-                                    search_items.clear();
-                                    search_item_positions.clear();
-                                    search_term.clear();
-                                    present_search_results = false;
-
-                                    // necessary evil
-                                    push_user_event(user_event_type, user_event::REFRESH);
-                                }
-                                hl.next();
-                                if (text_button(hl.box(), "Up", fa, gc))
-                                    search_items_view_pos = dec_ensure_lower(search_items_view_pos - 10, search_items_view_pos, 0);
-                                hl.next();
-                                if (text_button(hl.box(), "Down", fa, gc))
-                                    // TODO Down works with small result
-                                    search_items_view_pos = inc_ensure_upper(search_items_view_pos + 10, search_items_view_pos, search_items.size() < 10 ? 0 : search_items.size() - 10);
-
-                                int selection = list_view(top_box, search_items, search_items_view_pos, -1, fa_small, gc);
-
-                                if (selection != -1)
-                                    mpdc.play_position(search_item_positions[selection]);
-                            }
-                            else
-                            {
-                                v_layout vl(6, 15, view_rect);
-
-                                auto top_box = vl.box();
-
-                                // draw keys
-                                std::array<char const * const, 5> letters
-                                    { "abcdef"
-                                    , "ghijkl"
-                                    , "mnopqr"
-                                    , "stuvwx"
-                                    , "yzäöü "
-                                    };
-                                vl.next();
-                                for (char const * row_ptr : letters)
-                                {
-                                    h_layout hl(6, 15, vl.box());
-                                    while (*row_ptr != 0)
-                                    {
-                                        bool line_finished = false;
-                                        // get a single utf8 encoded unicode character
-                                        char buff[8];
-
-                                        int const num_bytes = utf8_byte_count(*row_ptr);
-                                        for (int pos = 0; pos < num_bytes; pos++)
-                                        {
-                                            buff[pos] = *row_ptr;
-                                            row_ptr++;
-                                        }
-                                        buff[num_bytes] = 0;
-
-                                        if (text_button(hl.box(), buff, fa, gc))
-                                            search_term += buff;
-                                        hl.next();
-                                        if (line_finished)
-                                            break;
-                                    }
-                                    vl.next();
-                                }
-
-                                // render controls (such that a redraw is not necessary)
-                                {
-                                    h_layout hl(6, 15, top_box);
-
-                                    auto search_term_box = hl.box(5);
-
-                                    hl.next(5);
-
-                                    if (text_button(hl.box(), "⌫", fa, gc))
-                                        search_term.clear();
-                                    hl.next();
-                                    //if (text_button(hl.box(), "⏎", fa, gc))
-                                    //    std::cout << "text submit" << std::endl;
-
-                                    if (text_button(search_term_box, '\'' + search_term + '\'', fa, gc))
-                                    {
-                                        // do search
-                                        search_item_positions.clear();
-                                        for (std::size_t pos = 0; pos < cpl.size(); pos++)
-                                        {
-                                            auto const & s = cpl[pos];
-                                            if (icu::UnicodeString::fromUTF8(s).toLower().indexOf(icu::UnicodeString::fromUTF8(search_term)) != -1)
-                                            {
-                                                search_item_positions.push_back(pos);
-                                                search_items.push_back(s);
-                                            }
-                                        }
-
-                                        present_search_results = true;
-                                        search_items_view_pos = 0;
-
-                                        // necessary evil
-                                        push_user_event(user_event_type, user_event::REFRESH);
-                                    }
-
-                                }
-                            }
-                        }
-                        else if (current_view == view_type::SHUTDOWN)
+                        if (current_view == view_type::SHUTDOWN)
                         {
                             gc.draw_background(view_rect);
                             //SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
@@ -1086,6 +953,144 @@ int main(int argc, char * argv[])
                             {
                                 run = false;
                                 quit_action = quit_action::REBOOT;
+                            }
+                        }
+                        else
+                        {
+                            gc.draw_background(view_rect);
+
+                            v_layout vl(6, 15, view_rect, true);
+                            auto top_box = vl.box(5);
+                            vl.next(5);
+
+                            unsigned int const item_skip = list_view_visible_items(top_box, fa_small);
+
+                            if (current_view == view_type::PLAYLIST)
+                            {
+
+                                h_layout hl(3, 30, vl.box());
+
+                                if (text_button(hl.box(), "Jump", fa, gc))
+                                    cpl_view_pos = current_song_pos >= 5 ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - item_skip)) : 0;
+                                hl.next();
+                                if (text_button(hl.box(), "Up", fa, gc))
+                                    cpl_view_pos = dec_ensure_lower(cpl_view_pos - item_skip, cpl_view_pos, 0);
+                                hl.next();
+                                if (text_button(hl.box(), "Down", fa, gc))
+                                    cpl_view_pos = inc_ensure_upper(cpl_view_pos + item_skip, cpl_view_pos, cpl.size() < item_skip ? 0 : cpl.size() - item_skip);
+
+                                int selection = list_view(top_box, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
+                                if (selection != -1)
+                                    mpdc.play_position(selection);
+
+                                // TODO calculcate from text height (font ascent)
+                            }
+                            else if (current_view == view_type::SONG_SEARCH)
+                            {
+                                if (present_search_results)
+                                {
+                                    h_layout hl(3, 30, vl.box());
+                                    if (text_button(hl.box(), "Back", fa, gc))
+                                    {
+                                        search_items.clear();
+                                        search_item_positions.clear();
+                                        search_term.clear();
+                                        present_search_results = false;
+
+                                        // necessary evil
+                                        push_user_event(user_event_type, user_event::REFRESH);
+                                    }
+                                    hl.next();
+                                    if (text_button(hl.box(), "Up", fa, gc))
+                                        search_items_view_pos = dec_ensure_lower(search_items_view_pos - item_skip, search_items_view_pos, 0);
+                                    hl.next();
+                                    if (text_button(hl.box(), "Down", fa, gc))
+                                        // TODO Down works with small result
+                                        search_items_view_pos = inc_ensure_upper(search_items_view_pos + item_skip, search_items_view_pos, search_items.size() < item_skip ? 0 : search_items.size() - item_skip);
+
+                                    int selection = list_view(top_box, search_items, search_items_view_pos, -1, fa_small, gc);
+
+                                    if (selection != -1)
+                                        mpdc.play_position(search_item_positions[selection]);
+                                }
+                                else
+                                {
+                                    v_layout vl(6, 15, view_rect);
+
+                                    auto top_box = vl.box();
+
+                                    // draw keys
+                                    std::array<char const * const, 5> letters
+                                        { "abcdef"
+                                        , "ghijkl"
+                                        , "mnopqr"
+                                        , "stuvwx"
+                                        , "yzäöü "
+                                        };
+                                    vl.next();
+                                    for (char const * row_ptr : letters)
+                                    {
+                                        h_layout hl(6, 15, vl.box());
+                                        while (*row_ptr != 0)
+                                        {
+                                            bool line_finished = false;
+                                            // get a single utf8 encoded unicode character
+                                            char buff[8];
+
+                                            int const num_bytes = utf8_byte_count(*row_ptr);
+                                            for (int pos = 0; pos < num_bytes; pos++)
+                                            {
+                                                buff[pos] = *row_ptr;
+                                                row_ptr++;
+                                            }
+                                            buff[num_bytes] = 0;
+
+                                            if (text_button(hl.box(), buff, fa, gc))
+                                                search_term += buff;
+                                            hl.next();
+                                            if (line_finished)
+                                                break;
+                                        }
+                                        vl.next();
+                                    }
+
+                                    // render controls (such that a redraw is not necessary)
+                                    {
+                                        h_layout hl(6, 15, top_box);
+
+                                        auto search_term_box = hl.box(5);
+
+                                        hl.next(5);
+
+                                        if (text_button(hl.box(), "⌫", fa, gc))
+                                            search_term.clear();
+                                        hl.next();
+                                        //if (text_button(hl.box(), "⏎", fa, gc))
+                                        //    std::cout << "text submit" << std::endl;
+
+                                        if (text_button(search_term_box, '\'' + search_term + '\'', fa, gc))
+                                        {
+                                            // do search
+                                            search_item_positions.clear();
+                                            for (std::size_t pos = 0; pos < cpl.size(); pos++)
+                                            {
+                                                auto const & s = cpl[pos];
+                                                if (icu::UnicodeString::fromUTF8(s).toLower().indexOf(icu::UnicodeString::fromUTF8(search_term)) != -1)
+                                                {
+                                                    search_item_positions.push_back(pos);
+                                                    search_items.push_back(s);
+                                                }
+                                            }
+
+                                            present_search_results = true;
+                                            search_items_view_pos = 0;
+
+                                            // necessary evil
+                                            push_user_event(user_event_type, user_event::REFRESH);
+                                        }
+
+                                    }
+                                }
                             }
                         }
                         SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
