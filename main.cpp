@@ -971,10 +971,10 @@ int main(int argc, char * argv[])
                                 if (text_button(hl.box(), "Jump", fa, gc))
                                     cpl_view_pos = current_song_pos >= 5 ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - item_skip)) : 0;
                                 hl.next();
-                                if (text_button(hl.box(), "Up", fa, gc))
+                                if (text_button(hl.box(), "▲", fa, gc))
                                     cpl_view_pos = dec_ensure_lower(cpl_view_pos - item_skip, cpl_view_pos, 0);
                                 hl.next();
-                                if (text_button(hl.box(), "Down", fa, gc))
+                                if (text_button(hl.box(), "▼", fa, gc))
                                     cpl_view_pos = inc_ensure_upper(cpl_view_pos + item_skip, cpl_view_pos, cpl.size() < item_skip ? 0 : cpl.size() - item_skip);
 
                                 int selection = list_view(top_box, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
@@ -988,7 +988,7 @@ int main(int argc, char * argv[])
                                 if (present_search_results)
                                 {
                                     h_layout hl(3, 4, vl.box());
-                                    if (text_button(hl.box(), "Back", fa, gc))
+                                    if (text_button(hl.box(), "⌨", fa, gc))
                                     {
                                         search_items.clear();
                                         search_item_positions.clear();
@@ -999,10 +999,10 @@ int main(int argc, char * argv[])
                                         push_user_event(user_event_type, user_event::REFRESH);
                                     }
                                     hl.next();
-                                    if (text_button(hl.box(), "Up", fa, gc))
+                                    if (text_button(hl.box(), "▲", fa, gc))
                                         search_items_view_pos = dec_ensure_lower(search_items_view_pos - item_skip, search_items_view_pos, 0);
                                     hl.next();
-                                    if (text_button(hl.box(), "Down", fa, gc))
+                                    if (text_button(hl.box(), "▼", fa, gc))
                                         // TODO Down works with small result
                                         search_items_view_pos = inc_ensure_upper(search_items_view_pos + item_skip, search_items_view_pos, search_items.size() < item_skip ? 0 : search_items.size() - item_skip);
 
