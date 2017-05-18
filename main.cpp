@@ -139,19 +139,21 @@ SDL_Surface * create_cover_replacement(SDL_Surface const * s, SDL_Rect brect, fo
 
     std::array<std::string const, 3> lines = { title, artist, album };
 
-    int y_offset = 20;
+    int const offset = fa.font_line_skip() / 2;
+
+    int y_offset = offset;
 
     for (auto & line : lines)
     {
         if (!line.empty())
         {
-            auto text_surface_ptr = fa.text(line);
+            auto text_surface_ptr = fa.text(line, brect.w - offset);
 
             if (text_surface_ptr)
             {
-                SDL_Rect r = { 20, y_offset, text_surface_ptr->w, text_surface_ptr->h };
+                SDL_Rect r = { offset, y_offset, text_surface_ptr->w, text_surface_ptr->h };
                 SDL_BlitSurface(text_surface_ptr.get(), 0, target_surface, &r);
-                y_offset += text_surface_ptr->h + 10;
+                y_offset += text_surface_ptr->h + offset;
             }
         }
     }
@@ -599,24 +601,6 @@ enum class user_event
     REFRESH
 };
 
-void push_user_event(uint32_t event_type, user_event ue)
-{
-    SDL_Event e;
-    SDL_memset(&e, 0, sizeof(e));
-    e.type = event_type;
-    e.user.code = (int)ue;
-    SDL_PushEvent(&e);
-}
-
-template <typename T> void push_change_event(uint32_t event_type, user_event ue, T & old_val, T const & new_val)
-{
-    if (old_val != new_val)
-    {
-        old_val = new_val;
-        push_user_event(event_type, ue);
-    }
-}
-
 // produce boxes to equally space widgets horizontally
 struct base_layout
 {
@@ -691,6 +675,24 @@ enum quit_action
 //    push_user_event(*reinterpret_cast<uint32_t *>(user_event_type_ptr), user_event::TIMER_EXPIRED);
 //    return 0;
 //}
+
+void push_user_event(uint32_t event_type, user_event ue)
+{
+    SDL_Event e;
+    SDL_memset(&e, 0, sizeof(e));
+    e.type = event_type;
+    e.user.code = (int)ue;
+    SDL_PushEvent(&e);
+}
+
+template <typename T> void push_change_event(uint32_t event_type, user_event ue, T & old_val, T const & new_val)
+{
+    if (old_val != new_val)
+    {
+        old_val = new_val;
+        push_user_event(event_type, ue);
+    }
+}
 
 int main(int argc, char * argv[])
 {
@@ -781,6 +783,7 @@ int main(int argc, char * argv[])
     mpd_control mpdc(
         [&](std::string const & uri, unsigned int pos)
         {
+            std::cout << "new song event" << std::endl;
             push_user_event(user_event_type, user_event::SONG_CHANGED);
             current_song_path = uri;
             current_song_pos = pos;
@@ -820,16 +823,16 @@ int main(int argc, char * argv[])
                 }
                 // most of the events are not required for a standalone fullscreen application
                 else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP
-                                                        || ev.type == SDL_USEREVENT
+                                                        || ev.type == user_event_type
 #ifdef TEST_BUILD
                                                         || ev.type == SDL_WINDOWEVENT
 #endif
                         )
                 {
 
-                    if (ev.type == SDL_USEREVENT)
+                    if (ev.type == user_event_type)
                     {
-                        switch (static_cast<user_event>(ev.type))
+                        switch (static_cast<user_event>(ev.user.code))
                         {
                             case user_event::SONG_CHANGED:
                                 // TODO do not reset
