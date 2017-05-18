@@ -163,9 +163,6 @@ std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> font_atlas::text(std::strin
                 }
             }
 
-            if (widths.back() == 0)
-                widths.pop_back();
-
             int const target_width = *std::max_element(widths.begin(), widths.end());
             int const target_height = font_line_skip() * static_cast<int>(widths.size());
 
