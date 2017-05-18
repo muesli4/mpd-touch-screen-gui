@@ -25,22 +25,20 @@
 #include "util.hpp"
 #include "font_atlas.hpp"
 
-// test build to run on local machine
 #ifndef __arm__
+// test build to run on local machine
 #define TEST_BUILD
 #endif
 
+// enable dimming functionality
+#define DIM_IDLE_TIMER
 
-// TODO inactive timer that darkens the screen after a minute or so
-// TODO when screen is darkened a touch event activates it
 // TODO when hardware rendering is available replace blits with texture copy of the renderer
 //      (for software it doesn't make sense, since the renderer will just make a copy of the surface to generate a texture)
 // TODO playlist: fade out song titles when over boundary or move source rectangle with time
 // TODO playlist: use several tags and display in different cells:
 //          - use a header colum (expand when clicked)
 //          - scroll with swipe
-
-// TODO font rendering that breaks lines
 // TODO move constants into config
 
 #ifdef TEST_BUILD
@@ -57,7 +55,11 @@ char const * const DIM_CMD = "display-pwm.sh 1024";
 char const * const UNDIM_CMD = "display-pwm.sh 0";
 #endif
 
-unsigned int const IDLE_TIMER_DELAY_MS = 60000;
+#ifdef DIM_IDLE_TIMER
+// after the delay without activity DIM_CMD is executed, once user input happens
+// again, UNDIM_CMD is executed
+std::chrono::milliseconds const IDLE_TIMER_DELAY_MS(60000);
+#endif
 
 // determines the minimum length of a swipe
 unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
@@ -597,7 +599,9 @@ enum class user_event
 {
     RANDOM_CHANGED,
     SONG_CHANGED,
+#ifdef DIM_IDLE_TIMER
     TIMER_EXPIRED,
+#endif
     REFRESH
 };
 
@@ -669,13 +673,6 @@ enum quit_action
     NONE
 };
 
-//Uint32 idle_timer_cb(Uint32 interval, void * user_event_type_ptr)
-//{
-//    std::cout << "timer executing " << interval << std::endl;
-//    push_user_event(*reinterpret_cast<uint32_t *>(user_event_type_ptr), user_event::TIMER_EXPIRED);
-//    return 0;
-//}
-
 void push_user_event(uint32_t event_type, user_event ue)
 {
     SDL_Event e;
@@ -694,6 +691,67 @@ template <typename T> void push_change_event(uint32_t event_type, user_event ue,
     }
 }
 
+#ifdef DIM_IDLE_TIMER
+//
+struct idle_timer_info
+{
+    idle_timer_info(uint32_t uet) : user_event_type(uet) {}
+
+    uint32_t const user_event_type;
+
+    void sync()
+    {
+        _start_tp = std::chrono::steady_clock::now();
+        _last_activity_tp = _start_tp;
+    }
+
+    void signal_user_activity()
+    {
+        _last_activity_tp = std::chrono::steady_clock::now();
+    }
+
+    std::chrono::milliseconds remaining_ms()
+    {
+        using namespace std::chrono;
+        return duration_cast<milliseconds>(_last_activity_tp - _start_tp);
+    }
+
+    private:
+
+    std::chrono::time_point<std::chrono::steady_clock> _last_activity_tp;
+    std::chrono::time_point<std::chrono::steady_clock> _start_tp;
+};
+
+Uint32 idle_timer_cb(Uint32 interval, void * iti_ptr)
+{
+
+    idle_timer_info & iti = *reinterpret_cast<idle_timer_info *>(iti_ptr);
+
+    auto rem_ms = iti.remaining_ms();
+
+    if (rem_ms.count() > 0)
+    {
+        iti.sync();
+        return rem_ms.count();
+    }
+    else
+    {
+        push_user_event(iti.user_event_type, user_event::TIMER_EXPIRED);
+        return 0;
+    }
+}
+#endif
+
+bool is_quit_event(SDL_Event const & ev)
+{
+    return ev.type == SDL_QUIT
+#ifdef TEST_BUILD
+           || (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_q)
+#endif
+           ;
+
+}
+
 int main(int argc, char * argv[])
 {
     // TODO move to config
@@ -704,7 +762,11 @@ int main(int argc, char * argv[])
     // allows swipes with multiple lines, as long as the time between them is below this TODO not implemented
     //unsigned int const TOUCH_DEBOUNCE_TIME_MS_THRESHOLD_MAX = 200;
 
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS
+#ifdef DIM_IDLE_TIMER
+                            | SDL_INIT_TIMER
+#endif
+            );
     std::atexit(SDL_Quit);
 
     // determine screen size of display 0
@@ -737,8 +799,6 @@ int main(int argc, char * argv[])
         std::exit(0);
     }
 
-    //TTF_SetFontStyle(font, TTF_STYLE_BOLD);
-
     // create window
     SDL_Window * window = SDL_CreateWindow
         ( "mpc-touch-lcd-gui"
@@ -757,7 +817,6 @@ int main(int argc, char * argv[])
 
     SDL_Surface * screen = SDL_GetWindowSurface(window);
 
-    //SDL_TimerID idle_timer;
 
     // loop state
     std::string current_song_path;
@@ -779,11 +838,15 @@ int main(int argc, char * argv[])
 
     // TODO check for error?
     uint32_t const user_event_type = SDL_RegisterEvents(1);
+#ifdef DIM_IDLE_TIMER
+    idle_timer_info iti(user_event_type);
+    // act as if the timer expired and it should dim now
+    push_user_event(user_event_type, user_event::TIMER_EXPIRED);
+#endif
 
     mpd_control mpdc(
         [&](std::string const & uri, unsigned int pos)
         {
-            std::cout << "new song event" << std::endl;
             push_user_event(user_event_type, user_event::SONG_CHANGED);
             current_song_path = uri;
             current_song_pos = pos;
@@ -811,12 +874,7 @@ int main(int argc, char * argv[])
 
             while (SDL_PollEvent(&ev) == 1)
             {
-                if ( ev.type == SDL_QUIT
-#ifdef TEST_BUILD
-                     || (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_q)
-#endif
-
-                   )
+                if (is_quit_event(ev))
                 {
                     std::cout << "Requested quit" << std::endl;
                     run = false;
@@ -839,32 +897,45 @@ int main(int argc, char * argv[])
                                 // if (has_cover && same album)
                                 cover_surface_ptr.reset();
                                 break;
-                            //case user_event::TIMER_EXPIRED:
-                            //    system(DIM_CMD);
-                            //    do
-                            //    {
-                            //        std::cout << "waiting for wakeup event" << std::endl;
-                            //        SDL_WaitEvent(&ev);
-                            //    } while (ev.type != SDL_MOUSEBUTTONDOWN || ev.type != SDL_MOUSEBUTTONUP);
-                            //    std::cout << "woke up" << std::endl;
-                            //    // ignore one event, turn on lights
-                            //    system(UNDIM_CMD);
-                            //    std::cout << "starting timer again" << std::endl;
-                            //    idle_timer = SDL_AddTimer(IDLE_TIMER_DELAY_MS, idle_timer_cb, reinterpret_cast<void *>(const_cast<uint32_t *>(&user_event_type)));
+#ifdef DIM_IDLE_TIMER
+                            case user_event::TIMER_EXPIRED:
+                                {
+                                    system(DIM_CMD);
+                                    bool exit_loop = false;
+                                    do
+                                    {
+                                        SDL_WaitEvent(&ev);
+                                        if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP)
+                                            break;
+                                        else if (is_quit_event(ev))
+                                        {
+                                            run = false;
+                                            exit_loop = true;
+                                            break;
+                                        }
+                                    } while (true);
+                                    if (exit_loop)
+                                        break;
 
-                            //    // go back to polling for events
-                            //    continue;
-                                break;
+                                    // ignore one event, turn on lights
+                                    system(UNDIM_CMD);
+                                    iti.sync();
+                                    SDL_AddTimer(IDLE_TIMER_DELAY_MS.count(), idle_timer_cb, &iti);
+
+                                    // go back to polling for events
+                                    continue;
+                                }
+#endif
                             default:
                                 break;
                         }
                     }
+#ifdef DIM_IDLE_TIMER
                     else
                     {
-                        //std::cout << "resetting timer" << std::endl;
-                        //SDL_RemoveTimer(idle_timer);
-                        //SDL_AddTimer(IDLE_TIMER_DELAY_MS, idle_timer_cb, reinterpret_cast<void *>(const_cast<uint32_t *>(&user_event_type)));
+                        iti.signal_user_activity();
                     }
+#endif
 
 
                     apply_sdl_event(ev, gei);
