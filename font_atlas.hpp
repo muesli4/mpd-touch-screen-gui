@@ -16,13 +16,18 @@ struct font_atlas
 {
     font_atlas(std::string font_path, int ptsize);
     ~font_atlas();
-    std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> text(std::string);
+
+    // render a text with an optional width specification
+    std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> text(std::string, int max_line_width = -1);
 
     unsigned int height();
 
     int font_line_skip();
 
     private:
+
+    int get_word_left_kerning(std::string const & word);
+    int get_word_right_kerning(std::string const & word);
 
     SDL_Surface * word(std::string);
 

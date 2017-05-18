@@ -1,5 +1,6 @@
 #include <vector>
 #include <iostream>
+#include <algorithm>
 
 #include "font_atlas.hpp"
 #include "util.hpp"
@@ -91,15 +92,21 @@ uint32_t get_first_ucs4(std::string s)
     return utf8_to_ucs4(d);
 }
 
-std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> font_atlas::text(std::string t)
+int font_atlas::get_word_left_kerning(std::string const & word)
 {
-    SDL_Surface * result;
+    return TTF_GetFontKerningSizeGlyphs(_font, get_last_ucs4(word), ' ');
+}
 
-    if (t.empty())
-    {
-        result = SDL_CreateRGBSurfaceWithFormat(0, 0, height(), 32, SDL_PIXELFORMAT_RGBA32);
-    }
-    else
+int font_atlas::get_word_right_kerning(std::string const & word)
+{
+    return TTF_GetFontKerningSizeGlyphs(_font, ' ', get_first_ucs4(word));
+}
+
+std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> font_atlas::text(std::string t, int max_line_width)
+{
+    SDL_Surface * result = nullptr;
+
+    if (!t.empty())
     {
         std::vector<std::string> words;
 
@@ -112,56 +119,88 @@ std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> font_atlas::text(std::strin
         }
         words.push_back(t.substr(last_pos));
 
-        int width = 0;
         std::vector<SDL_Surface *> surfaces;
 
+        // render or load cached word surfaces
         for (auto const & w : words)
         {
-            // FIXME how to handle double spaces in text?
-            SDL_Surface * s = word(w.empty() ? " " : w);
-            surfaces.push_back(s);
-            width += s->w;
+            // ignore multiple spaces
+            if (!w.empty())
+            {
+                SDL_Surface * s = word(w);
+                surfaces.push_back(s);
+            }
         }
-
-        std::vector<int> spaces;
-        spaces.push_back(0);
-        for (std::size_t n = 0; n + 1 < words.size(); n++)
+        if (!surfaces.empty())
         {
-            // use proper kerning with space
-            int const left_kerning = TTF_GetFontKerningSizeGlyphs(_font, get_last_ucs4(words[n]), ' ');
-            int const right_kerning = TTF_GetFontKerningSizeGlyphs(_font, ' ', get_last_ucs4(words[n + 1]));
-            int const join_width = (_space_minx < 0 ? -_space_minx : 0) + _space_advance + left_kerning + right_kerning;
-            width += join_width;
-            spaces.push_back(join_width);
-            //std::cout << "word[" << n << "] = \"" << words[n]
-            //          << "\",  with join_width " << left_kerning << " + " << _space_advance << " + " << right_kerning
-            //          << ", minx = " << minx
-            //          << ", maxx = " << maxx
-            //          << std::endl;
-            //std::wcout << L"    chars in question '" << (wchar_t) get_last_ucs4(words[n]) << L"' and '" << (wchar_t) get_first_ucs4(words[n + 1]) << L"'" << std::endl;
+            std::vector<int> widths{surfaces[0]->w};
+            std::vector<std::vector<int>> spaces_per_line{{0}};
+
+            // TODO check if surface width does exceed line width ?
+            std::vector<std::vector<SDL_Surface *>> surfaces_per_line{{surfaces[0]}};
+
+            for (std::size_t n = 0; n + 1 < words.size(); n++)
+            {
+                int & line_width = widths.back();
+
+                // use proper kerning and advance of space to connect words
+                int const join_width = get_word_left_kerning(words[n]) + _space_advance + get_word_right_kerning(words[n + 1]);
+
+                int const new_line_width = line_width + join_width + surfaces[n + 1]->w;
+
+                if (max_line_width == -1 || new_line_width < max_line_width)
+                {
+                    surfaces_per_line.back().push_back(surfaces[n + 1]);
+                    spaces_per_line.back().push_back(join_width);
+                    line_width = new_line_width;
+                }
+                else
+                {
+                    // TODO check if surface width does exceed line width ?
+                    surfaces_per_line.push_back({surfaces[n + 1]});
+                    spaces_per_line.push_back({0});
+                    widths.push_back(surfaces[n + 1]->w);
+                }
+            }
+
+            if (widths.back() == 0)
+                widths.pop_back();
+
+            int const target_width = *std::max_element(widths.begin(), widths.end());
+            int const target_height = font_line_skip() * static_cast<int>(widths.size());
+
+            // TODO move and use create_similar_surface
+            result = SDL_CreateRGBSurfaceWithFormat(0, target_width, target_height, 32, SDL_PIXELFORMAT_RGBA32);
+
+            int x = 0;
+            int y = 0;
+
+            for (std::size_t n = 0; n < surfaces_per_line.size(); n++)
+            {
+                // blit line
+                for (std::size_t m = 0; m < surfaces_per_line[n].size(); m++)
+                {
+                    SDL_Surface * s = surfaces_per_line[n][m];
+
+                    // use no alpha blending for source, completely overwrite the target, including alpha channel
+                    SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);
+
+                    x += spaces_per_line[n][m];
+                    SDL_Rect r {x, y, s->w, s->h};
+                    SDL_BlitSurface(s, nullptr, result, &r);
+                    x += s->w;
+                }
+                x = 0;
+                y += font_line_skip();
+            }
+
+            // use alpha blending supplied by the blitted surfaces' alpha channel
+            SDL_SetSurfaceBlendMode(result, SDL_BLENDMODE_BLEND);
         }
-        //std::cout << "spaces" << std::endl;
-
-        // TODO move and use create_similar_surface
-        result = SDL_CreateRGBSurfaceWithFormat(0, width, height(), 32, SDL_PIXELFORMAT_RGBA32);
-
-        int x = 0;
-        for (std::size_t n = 0; n < surfaces.size(); n++)
-        {
-            SDL_Surface * s = surfaces[n];
-
-            // use no alpha blending for source, completely overwrite the target, including alpha channel
-            SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);
-
-            x += spaces[n];
-            SDL_Rect r {x, 0, s->w, s->h};
-            SDL_BlitSurface(s, nullptr, result, &r);
-            x += s->w;
-        }
-
-        // use alpha blending supplied by the blitted surfaces' alpha channel
-        SDL_SetSurfaceBlendMode(result, SDL_BLENDMODE_BLEND);
     }
+
+    if (result == nullptr)
+        result = SDL_CreateRGBSurfaceWithFormat(0, 0, height(), 32, SDL_PIXELFORMAT_RGBA32);
     return std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)>(result, [](SDL_Surface * s){ SDL_FreeSurface(s); });
 }
 
