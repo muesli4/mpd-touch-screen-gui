@@ -19,4 +19,11 @@ std::string absolute_cover_path(std::string base_dir, std::string rel_song_dir_p
 std::string string_from_ptr(char const * const ptr);
 
 int utf8_byte_count(uint8_t start_byte);
+
+int next_utf8(char * buff, char const * ptr);
+
+bool is_utf8_following_byte(uint8_t b);
+
+// assumes a non-empty and well-formed utf8 string
+int count_utf8_backwards(char const * ptr);
 #endif

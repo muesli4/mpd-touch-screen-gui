@@ -1,6 +1,8 @@
-#include "font_atlas.hpp"
 #include <vector>
 #include <iostream>
+
+#include "font_atlas.hpp"
+#include "util.hpp"
 
 font_not_found::font_not_found(std::string msg)
     : std::runtime_error("font not found: " + msg)
@@ -57,13 +59,6 @@ uint32_t utf8_to_ucs4(std::deque<uint8_t> coded)
     return charcode;
 }
 
-bool is_following_byte(uint8_t b)
-{
-    // following bytes have most significant bit set and 2nd most significant
-    // bit cleared
-    return (b & 0b10000000) && !(b & 0b01000000);
-}
-
 // get the last utf8 character from a string
 uint32_t get_last_ucs4(std::string s)
 {
@@ -71,7 +66,7 @@ uint32_t get_last_ucs4(std::string s)
     if (*ptr == 0) ptr = " ";
 
     std::deque<uint8_t> d;
-    while (is_following_byte(*ptr))
+    while (is_utf8_following_byte(*ptr))
     {
         d.push_front(*ptr);
         ptr--;
@@ -88,7 +83,7 @@ uint32_t get_first_ucs4(std::string s)
     std::deque<uint8_t> d;
     d.push_back(*ptr);
     ptr++;
-    while (is_following_byte(*ptr))
+    while (is_utf8_following_byte(*ptr))
     {
         d.push_back(*ptr);
         ptr++;

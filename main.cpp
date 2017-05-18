@@ -36,8 +36,11 @@
 // TODO when hardware rendering is available replace blits with texture copy of the renderer
 //      (for software it doesn't make sense, since the renderer will just make a copy of the surface to generate a texture)
 // TODO playlist: fade out song titles when over boundary or move source rectangle with time
+// TODO playlist: use several tags and display in different cells:
+//          - use a header colum (expand when clicked)
+//          - scroll with swipe
 
-// TODO font rendering that breaks lines, makes caching harder (maybe cache words?)
+// TODO font rendering that breaks lines
 // TODO move constants into config
 
 #ifdef TEST_BUILD
@@ -873,7 +876,7 @@ int main(int argc, char * argv[])
                             , [](){ std::cout << "unused b" << std::endl; }
                             , [](){ std::cout << "unused c" << std::endl; }
                             };
-                        std::array<char const * const, 6> global_button_labels { "♫", "P", "R", "-", "-", "-" };
+                        std::array<char const * const, 6> global_button_labels { "♫", "►", "R", "A", "B", "C" };
                         SDL_Rect buttons_rect {0, 0, 40, screen->h};
                         gc.draw_background(buttons_rect);
                         v_layout l(6, 4, pad_box(buttons_rect, 4));
@@ -936,7 +939,7 @@ int main(int argc, char * argv[])
                             gc.draw_background(view_rect);
                             //SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
 
-                            v_layout l(2, 40, pad_box(view_rect, 40));
+                            v_layout l(2, 4, pad_box(view_rect, 44));
 
                             if (text_button(l.box(), "Shutdown", fa, gc))
                             {
@@ -1010,7 +1013,7 @@ int main(int argc, char * argv[])
                                 }
                                 else
                                 {
-                                    v_layout vl(6, 4, pad_box(view_rect, 2));
+                                    v_layout vl(6, 4, pad_box(view_rect, 4));
 
                                     auto top_box = vl.box();
 
@@ -1023,28 +1026,26 @@ int main(int argc, char * argv[])
                                         , "yzäöü "
                                         };
                                     vl.next();
+
                                     for (char const * row_ptr : letters)
                                     {
                                         h_layout hl(6, 4, vl.box());
                                         while (*row_ptr != 0)
                                         {
-                                            bool line_finished = false;
                                             // get a single utf8 encoded unicode character
                                             char buff[8];
 
-                                            int const num_bytes = utf8_byte_count(*row_ptr);
-                                            for (int pos = 0; pos < num_bytes; pos++)
-                                            {
-                                                buff[pos] = *row_ptr;
-                                                row_ptr++;
-                                            }
-                                            buff[num_bytes] = 0;
+                                            int const num_bytes = next_utf8(buff, row_ptr);
 
-                                            if (text_button(hl.box(), buff, fa, gc))
-                                                search_term += buff;
-                                            hl.next();
-                                            if (line_finished)
+                                            if (num_bytes == 0)
                                                 break;
+                                            else
+                                            {
+                                                if (text_button(hl.box(), buff, fa, gc))
+                                                    search_term += buff;
+                                                hl.next();
+                                                row_ptr += num_bytes;
+                                            }
                                         }
                                         vl.next();
                                     }
@@ -1052,16 +1053,18 @@ int main(int argc, char * argv[])
                                     // render controls (such that a redraw is not necessary)
                                     {
                                         h_layout hl(6, 4, top_box);
+                                        auto search_term_box = hl.box(4);
 
-                                        auto search_term_box = hl.box(5);
+                                        hl.next(4);
 
-                                        hl.next(5);
-
-                                        if (text_button(hl.box(), "⌫", fa, gc))
-                                            search_term.clear();
+                                        if (text_button(hl.box(), "⌫", fa, gc) && !search_term.empty())
+                                        {
+                                            int const len = count_utf8_backwards(search_term.c_str() + search_term.size() - 1);
+                                            search_term.resize(search_term.size() - len);
+                                        }
                                         hl.next();
-                                        //if (text_button(hl.box(), "⏎", fa, gc))
-                                        //    std::cout << "text submit" << std::endl;
+                                        if (text_button(hl.box(), "⌧", fa, gc))
+                                            search_term.clear();
 
                                         if (text_button(search_term_box, '\'' + search_term + '\'', fa, gc))
                                         {
