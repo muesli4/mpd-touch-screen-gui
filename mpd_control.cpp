@@ -182,9 +182,14 @@ std::vector<std::string> mpd_control::get_current_playlist()
             mpd_song * song;
             while ((song = mpd_recv_song(c)) != nullptr)
             {
+                char const * artist = mpd_song_get_tag(song, MPD_TAG_ARTIST, 0);
+                if (artist == nullptr)
+                    artist = mpd_song_get_tag(song, MPD_TAG_ALBUM_ARTIST, 0);
+                if (artist == nullptr)
+                    artist = mpd_song_get_tag(song, MPD_TAG_COMPOSER, 0);
+                    
                 playlist.push_back(
-                    string_from_ptr(mpd_song_get_tag(song, MPD_TAG_ARTIST, 0))
-                    + " - "
+                    (artist == nullptr ? "" : std::string(artist) + " - ")
                     + string_from_ptr(mpd_song_get_tag(song, MPD_TAG_TITLE, 0))
                 );
                 mpd_song_free(song);
