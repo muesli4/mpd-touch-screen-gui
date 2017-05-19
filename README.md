@@ -16,6 +16,14 @@ You will have to change the cover path constants. Most of the other parts are sy
 * In the search view a on-screen keyboard is presented that allows to search for songs case-insensitive. The results may be browsed and played in the same manner as with the playlist view.
 * A final view allows shutting down and rebooting the machine.
 
+# Requirements
+
+* SDL2_ttf
+* SDL2_image
+* sdl2
+* libmpdclient
+* icu-uc
+
 # State
 
 Still experimental but pretty functional overall. I used a quick and dirty implementation of an IMGUI library (mostly for rapid development and learning purposes).
