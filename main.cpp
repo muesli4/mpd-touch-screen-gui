@@ -753,6 +753,17 @@ bool is_quit_event(SDL_Event const & ev)
 
 }
 
+void refresh_current_playlist(std::vector<std::string> & cpl, unsigned int & cpv, mpd_control & mpdc)
+{
+    playlist_change_info pci = mpdc.get_current_playlist_changes(cpv);
+    cpl.resize(pci.new_length);
+    cpv = pci.new_version;
+    for (auto & p : pci.changed_positions)
+    {
+        cpl[p.first].swap(p.second);
+    }
+}
+
 int main(int argc, char * argv[])
 {
     // TODO move to config
@@ -828,6 +839,7 @@ int main(int argc, char * argv[])
     unsigned int cpl_view_pos = 0;
     std::vector<std::string> cpl;
     unsigned int cpv;
+    bool current_playlist_needs_refresh = false;
 
     bool present_search_results = false;
     std::string search_term;
@@ -909,15 +921,12 @@ int main(int argc, char * argv[])
                                 cover_surface_ptr.reset();
                                 break;
                             case user_event::PLAYLIST_CHANGED:
-                                {
-                                    playlist_change_info pci = mpdc.get_current_playlist_changes(cpv);
-                                    cpl.resize(pci.new_length);
-                                    cpv = pci.new_version;
-                                    for (auto & p : pci.changed_positions)
-                                    {
-                                        cpl[p.first].swap(p.second);
-                                    }
-                                }
+#ifdef DIM_IDLE_TIMER
+                                if (dimmed)
+                                    current_playlist_needs_refresh = true;
+                                else
+#endif
+                                    refresh_current_playlist(cpl, cpv, mpdc);
                                 break;
 #ifdef DIM_IDLE_TIMER
                             case user_event::TIMER_EXPIRED:
@@ -940,6 +949,11 @@ int main(int argc, char * argv[])
                     {
                         if (dimmed)
                         {
+                            if (current_playlist_needs_refresh)
+                            {
+                                refresh_current_playlist(cpl, cpv, mpdc);
+                                current_playlist_needs_refresh = false;
+                            }
                             // ignore one event, turn on lights
                             dimmed = false;
                             system(UNDIM_CMD);
