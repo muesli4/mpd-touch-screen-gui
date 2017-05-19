@@ -940,26 +940,24 @@ int main(int argc, char * argv[])
 
                     apply_sdl_event(ev, gei);
 
+                    // global buttons
                     {
-                        // global buttons
-                        std::array<std::function<void()>, 6> global_button_functions 
-                            { [&](){ current_view = cycle_view_type(current_view); view_dirty = true; }
-                            , [&](){ mpdc.toggle_pause(); }
-                            , [&](){ mpdc.set_random(!random); }
-                            , [](){ std::cout << "unused a" << std::endl; }
-                            , [](){ std::cout << "unused b" << std::endl; }
-                            , [](){ std::cout << "unused c" << std::endl; }
-                            };
-                        std::array<char const * const, 6> global_button_labels { "♫", "►", "R", "A", "B", "C" };
                         SDL_Rect buttons_rect {0, 0, 40, screen->h};
                         gc.draw_background(buttons_rect);
                         v_layout l(6, 4, pad_box(buttons_rect, 4));
-                        for (int i = 0; i < 6; i++)
+
+                        if (text_button(l.box(), "♫", fa, gc))
                         {
-                            if (text_button(l.box(), global_button_labels[i], fa, gc))
-                                global_button_functions[i]();
-                            l.next();
+                            current_view = cycle_view_type(current_view);
+                            view_dirty = true;
                         }
+                        l.next();
+                        if (text_button(l.box(), "►", fa, gc))
+                            mpdc.toggle_pause();
+                        l.next();
+                        if (text_button(l.box(), random ? "¬R" : "R", fa, gc))
+                            mpdc.set_random(!random);
+
                         SDL_UpdateWindowSurfaceRects(window, &buttons_rect, 1);
                     }
 
