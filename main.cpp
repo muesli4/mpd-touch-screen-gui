@@ -599,6 +599,7 @@ enum class user_event
 {
     RANDOM_CHANGED,
     SONG_CHANGED,
+    PLAYLIST_CHANGED,
 #ifdef DIM_IDLE_TIMER
     TIMER_EXPIRED,
 #endif
@@ -826,6 +827,7 @@ int main(int argc, char * argv[])
     unsigned int current_song_pos = 0;
     unsigned int cpl_view_pos = 0;
     std::vector<std::string> cpl;
+    unsigned int cpv;
 
     bool present_search_results = false;
     std::string search_term;
@@ -840,6 +842,7 @@ int main(int argc, char * argv[])
     uint32_t const user_event_type = SDL_RegisterEvents(1);
 #ifdef DIM_IDLE_TIMER
     idle_timer_info iti(user_event_type);
+    bool dimmed = true;
     // act as if the timer expired and it should dim now
     push_user_event(user_event_type, user_event::TIMER_EXPIRED);
 #endif
@@ -854,12 +857,20 @@ int main(int argc, char * argv[])
         [&](bool value)
         {
             push_change_event(user_event_type, user_event::RANDOM_CHANGED, random, value);
+        },
+        [&]()
+        {
+            push_user_event(user_event_type, user_event::PLAYLIST_CHANGED);
         }
     );
 
     std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
 
-    cpl = mpdc.get_current_playlist();
+    {
+        std::pair<std::vector<std::string>, unsigned int> playlist_data = mpdc.get_current_playlist();
+        cpl.swap(playlist_data.first);
+        cpv = playlist_data.second;
+    }
 
     {
         font_atlas fa(DEFAULT_FONT_PATH, 20);
@@ -897,47 +908,51 @@ int main(int argc, char * argv[])
                                 // if (has_cover && same album)
                                 cover_surface_ptr.reset();
                                 break;
+                            case user_event::PLAYLIST_CHANGED:
+                                {
+                                    playlist_change_info pci = mpdc.get_current_playlist_changes(cpv);
+                                    cpl.resize(pci.new_length);
+                                    cpv = pci.new_version;
+                                    for (auto & p : pci.changed_positions)
+                                    {
+                                        cpl[p.first].swap(p.second);
+                                    }
+                                }
+                                break;
 #ifdef DIM_IDLE_TIMER
                             case user_event::TIMER_EXPIRED:
-                                {
-                                    system(DIM_CMD);
-                                    bool exit_loop = false;
-                                    do
-                                    {
-                                        SDL_WaitEvent(&ev);
-                                        if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP)
-                                            break;
-                                        else if (is_quit_event(ev))
-                                        {
-                                            run = false;
-                                            exit_loop = true;
-                                            break;
-                                        }
-                                    } while (true);
-                                    if (exit_loop)
-                                        break;
-
-                                    // ignore one event, turn on lights
-                                    system(UNDIM_CMD);
-                                    iti.sync();
-                                    SDL_AddTimer(IDLE_TIMER_DELAY_MS.count(), idle_timer_cb, &iti);
-
-                                    // go back to polling for events
-                                    continue;
-                                }
+                                dimmed = true;
+                                system(DIM_CMD);
+                                continue;
 #endif
                             default:
                                 break;
                         }
+#ifdef DIM_IDLE_TIMER
+                        // handle change events, but nothing else
+                        // TODO not optimal since playlist changes are technically not necessary
+                        if (dimmed)
+                            continue;
+#endif
                     }
 #ifdef DIM_IDLE_TIMER
                     else
                     {
-                        iti.signal_user_activity();
+                        if (dimmed)
+                        {
+                            // ignore one event, turn on lights
+                            dimmed = false;
+                            system(UNDIM_CMD);
+                            iti.sync();
+                            SDL_AddTimer(IDLE_TIMER_DELAY_MS.count(), idle_timer_cb, &iti);
+                            continue;
+                        }
+                        else
+                        {
+                            iti.signal_user_activity();
+                        }
                     }
 #endif
-
-
                     apply_sdl_event(ev, gei);
 
                     // global buttons

@@ -8,9 +8,20 @@
 
 #include <mpd/client.h>
 
+struct playlist_change_info
+{
+    typedef std::vector<std::pair<unsigned int, std::string>> diff_type;
+
+    playlist_change_info(int nv, diff_type && cp, unsigned int l);
+
+    unsigned int new_version;
+    diff_type changed_positions;
+    unsigned int new_length;
+};
+
 struct mpd_control
 {
-    mpd_control(std::function<void(std::string, unsigned int)> new_song_cb, std::function<void(bool)> random_cb);
+    mpd_control(std::function<void(std::string, unsigned int)> new_song_cb, std::function<void(bool)> random_cb, std::function<void()> playlist_changed_cb);
     ~mpd_control();
 
     void run();
@@ -32,7 +43,9 @@ struct mpd_control
     std::string get_current_artist();
     std::string get_current_album();
 
-    std::vector<std::string> get_current_playlist();
+    std::pair<std::vector<std::string>, unsigned int> get_current_playlist();
+
+    playlist_change_info get_current_playlist_changes(unsigned int version);
 
     private:
 
@@ -48,6 +61,7 @@ struct mpd_control
 
     std::function<void(std::string, unsigned int)> _new_song_cb;
     std::function<void(bool)> _random_cb;
+    std::function<void()> _playlist_changed_cb;
 
     std::mutex _external_tasks_mutex;
     std::deque<std::function<void(mpd_connection *)>> _external_tasks;
