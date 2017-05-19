@@ -114,22 +114,27 @@ std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> font_atlas::text(std::strin
         std::size_t last_pos = 0;
         while ((pos = t.find(' ', last_pos)) != std::string::npos)
         {
-            words.push_back(t.substr(last_pos, pos - last_pos));
+            std::string const & w = t.substr(last_pos, pos - last_pos);
+            // ignore multiple spaces
+            if (!w.empty())
+            {
+                words.push_back(w);
+            }
             last_pos = pos + 1;
         }
-        words.push_back(t.substr(last_pos));
+        {
+            std::string const & w = t.substr(last_pos);
+            if (!w.empty())
+                words.push_back(w);
+        }
 
         std::vector<SDL_Surface *> surfaces;
 
         // render or load cached word surfaces
         for (auto const & w : words)
         {
-            // ignore multiple spaces
-            if (!w.empty())
-            {
-                SDL_Surface * s = word(w);
-                surfaces.push_back(s);
-            }
+            SDL_Surface * s = word(w);
+            surfaces.push_back(s);
         }
         if (!surfaces.empty())
         {
@@ -139,6 +144,7 @@ std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> font_atlas::text(std::strin
             // TODO check if surface width does exceed line width ?
             std::vector<std::vector<SDL_Surface *>> surfaces_per_line{{surfaces[0]}};
 
+            // assertion: surfaces.size() == words.size()
             for (std::size_t n = 0; n + 1 < words.size(); n++)
             {
                 int & line_width = widths.back();
