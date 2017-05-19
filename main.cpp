@@ -891,312 +891,308 @@ int main(int argc, char * argv[])
         gui_context gc(gei, screen);
 
         bool run = true;
-        while (run)
+        SDL_Event ev;
+
+        while (run && SDL_WaitEvent(&ev) == 1)
         {
-            SDL_Event ev;
-
-            while (SDL_PollEvent(&ev) == 1)
+            if (is_quit_event(ev))
             {
-                if (is_quit_event(ev))
-                {
-                    std::cout << "Requested quit" << std::endl;
-                    run = false;
-                }
-                // most of the events are not required for a standalone fullscreen application
-                else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP
-                                                        || ev.type == user_event_type
+                std::cout << "Requested quit" << std::endl;
+                run = false;
+            }
+            // most of the events are not required for a standalone fullscreen application
+            else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP
+                                                    || ev.type == user_event_type
 #ifdef TEST_BUILD
-                                                        || ev.type == SDL_WINDOWEVENT
+                                                    || ev.type == SDL_WINDOWEVENT
 #endif
-                        )
+                    )
+            {
+
+                if (ev.type == user_event_type)
                 {
-
-                    if (ev.type == user_event_type)
+                    switch (static_cast<user_event>(ev.user.code))
                     {
-                        switch (static_cast<user_event>(ev.user.code))
-                        {
-                            case user_event::SONG_CHANGED:
-                                // TODO do not reset
-                                // if (has_cover && same album)
-                                cover_surface_ptr.reset();
-                                break;
-                            case user_event::PLAYLIST_CHANGED:
+                        case user_event::SONG_CHANGED:
+                            // TODO do not reset
+                            // if (has_cover && same album)
+                            cover_surface_ptr.reset();
+                            break;
+                        case user_event::PLAYLIST_CHANGED:
 #ifdef DIM_IDLE_TIMER
-                                if (dimmed)
-                                    current_playlist_needs_refresh = true;
-                                else
+                            if (dimmed)
+                                current_playlist_needs_refresh = true;
+                            else
 #endif
-                                    refresh_current_playlist(cpl, cpv, mpdc);
-                                break;
-#ifdef DIM_IDLE_TIMER
-                            case user_event::TIMER_EXPIRED:
-                                dimmed = true;
-                                system(DIM_CMD);
-                                continue;
-#endif
-                            default:
-                                break;
-                        }
-#ifdef DIM_IDLE_TIMER
-                        // handle change events, but nothing else
-                        // TODO not optimal since playlist changes are technically not necessary
-                        if (dimmed)
-                            continue;
-#endif
-                    }
-#ifdef DIM_IDLE_TIMER
-                    else
-                    {
-                        if (dimmed)
-                        {
-                            if (current_playlist_needs_refresh)
-                            {
                                 refresh_current_playlist(cpl, cpv, mpdc);
-                                current_playlist_needs_refresh = false;
-                            }
-                            // ignore one event, turn on lights
-                            dimmed = false;
-                            system(UNDIM_CMD);
-                            iti.sync();
-                            SDL_AddTimer(IDLE_TIMER_DELAY_MS.count(), idle_timer_cb, &iti);
+                            break;
+#ifdef DIM_IDLE_TIMER
+                        case user_event::TIMER_EXPIRED:
+                            dimmed = true;
+                            system(DIM_CMD);
                             continue;
-                        }
-                        else
-                        {
-                            iti.signal_user_activity();
-                        }
-                    }
 #endif
-                    apply_sdl_event(ev, gei);
-
-                    // global buttons
-                    {
-                        SDL_Rect buttons_rect {0, 0, 40, screen->h};
-                        gc.draw_background(buttons_rect);
-                        v_layout l(6, 4, pad_box(buttons_rect, 4));
-
-                        if (text_button(l.box(), "♫", fa, gc))
-                        {
-                            current_view = cycle_view_type(current_view);
-                            view_dirty = true;
-                        }
-                        l.next();
-                        if (text_button(l.box(), "►", fa, gc))
-                            mpdc.toggle_pause();
-                        l.next();
-                        if (text_button(l.box(), random ? "¬R" : "R", fa, gc))
-                            mpdc.set_random(!random);
-
-                        SDL_UpdateWindowSurfaceRects(window, &buttons_rect, 1);
+                        default:
+                            break;
                     }
-
-                    SDL_Rect const view_rect = {40, 0, screen->w - 40, screen->h};
-
-                    // view area
-                    if (current_view == view_type::COVER_SWIPE)
+#ifdef DIM_IDLE_TIMER
+                    // handle change events, but nothing else
+                    // TODO not optimal since playlist changes are technically not necessary
+                    if (dimmed)
+                        continue;
+#endif
+                }
+#ifdef DIM_IDLE_TIMER
+                else
+                {
+                    if (dimmed)
                     {
-                        action a = swipe_area(view_rect, gei);
-
-                        // redraw cover if it is a new one or if marked dirty
-                        if (view_dirty || !cover_surface_ptr)
+                        if (current_playlist_needs_refresh)
                         {
-                            if (!cover_surface_ptr)
-                            {
-                                SDL_Rect cover_rect { 0, 0, view_rect.w, view_rect.h};
-                                SDL_Surface * cover_surface;
-                                view_dirty = true;
-                                SDL_Surface * img_surface = load_cover(current_song_path);
-                                if (img_surface != nullptr)
-                                {
-                                    has_cover = true;
-                                    cover_surface = create_similar_surface(screen, cover_rect.w, cover_rect.h);
-                                    blit_preserve_ar(img_surface, cover_surface, &cover_rect);
-                                }
-                                else
-                                {
-                                    has_cover = false;
-                                    cover_surface =
-                                        create_cover_replacement( screen
-                                                                , cover_rect
-                                                                , fa
-                                                                , mpdc.get_current_title()
-                                                                , mpdc.get_current_artist()
-                                                                , mpdc.get_current_album()
-                                                                );
-                                }
-                                cover_surface_ptr.reset(cover_surface);
-                            }
-                            SDL_Rect r = view_rect;
-                            SDL_BlitSurface(cover_surface_ptr.get(), nullptr, screen, &r);
-                            SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
-                            view_dirty = false;
+                            refresh_current_playlist(cpl, cpv, mpdc);
+                            current_playlist_needs_refresh = false;
                         }
-                        handle_action(a, mpdc, 5);
+                        // ignore one event, turn on lights
+                        dimmed = false;
+                        system(UNDIM_CMD);
+                        iti.sync();
+                        SDL_AddTimer(IDLE_TIMER_DELAY_MS.count(), idle_timer_cb, &iti);
+                        continue;
                     }
                     else
                     {
-                        if (current_view == view_type::SHUTDOWN)
+                        iti.signal_user_activity();
+                    }
+                }
+#endif
+                apply_sdl_event(ev, gei);
+
+                // global buttons
+                {
+                    SDL_Rect buttons_rect {0, 0, 40, screen->h};
+                    gc.draw_background(buttons_rect);
+                    v_layout l(6, 4, pad_box(buttons_rect, 4));
+
+                    if (text_button(l.box(), "♫", fa, gc))
+                    {
+                        current_view = cycle_view_type(current_view);
+                        view_dirty = true;
+                    }
+                    l.next();
+                    if (text_button(l.box(), "►", fa, gc))
+                        mpdc.toggle_pause();
+                    l.next();
+                    if (text_button(l.box(), random ? "¬R" : "R", fa, gc))
+                        mpdc.set_random(!random);
+
+                    SDL_UpdateWindowSurfaceRects(window, &buttons_rect, 1);
+                }
+
+                SDL_Rect const view_rect = {40, 0, screen->w - 40, screen->h};
+
+                // view area
+                if (current_view == view_type::COVER_SWIPE)
+                {
+                    action a = swipe_area(view_rect, gei);
+
+                    // redraw cover if it is a new one or if marked dirty
+                    if (view_dirty || !cover_surface_ptr)
+                    {
+                        if (!cover_surface_ptr)
                         {
-                            gc.draw_background(view_rect);
-                            //SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
-
-                            v_layout l(2, 4, pad_box(view_rect, 44));
-
-                            if (text_button(l.box(), "Shutdown", fa, gc))
+                            SDL_Rect cover_rect { 0, 0, view_rect.w, view_rect.h};
+                            SDL_Surface * cover_surface;
+                            view_dirty = true;
+                            SDL_Surface * img_surface = load_cover(current_song_path);
+                            if (img_surface != nullptr)
                             {
-                                run = false;
-                                quit_action = quit_action::SHUTDOWN;
+                                has_cover = true;
+                                cover_surface = create_similar_surface(screen, cover_rect.w, cover_rect.h);
+                                blit_preserve_ar(img_surface, cover_surface, &cover_rect);
                             }
-                            l.next();
-                            if (text_button(l.box(), "Reboot", fa, gc))
+                            else
                             {
-                                run = false;
-                                quit_action = quit_action::REBOOT;
+                                has_cover = false;
+                                cover_surface =
+                                    create_cover_replacement( screen
+                                                            , cover_rect
+                                                            , fa
+                                                            , mpdc.get_current_title()
+                                                            , mpdc.get_current_artist()
+                                                            , mpdc.get_current_album()
+                                                            );
                             }
+                            cover_surface_ptr.reset(cover_surface);
                         }
-                        else
+                        SDL_Rect r = view_rect;
+                        SDL_BlitSurface(cover_surface_ptr.get(), nullptr, screen, &r);
+                        SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
+                        view_dirty = false;
+                    }
+                    handle_action(a, mpdc, 5);
+                }
+                else
+                {
+                    if (current_view == view_type::SHUTDOWN)
+                    {
+                        gc.draw_background(view_rect);
+                        //SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
+
+                        v_layout l(2, 4, pad_box(view_rect, 44));
+
+                        if (text_button(l.box(), "Shutdown", fa, gc))
                         {
-                            gc.draw_background(view_rect);
+                            run = false;
+                            quit_action = quit_action::SHUTDOWN;
+                        }
+                        l.next();
+                        if (text_button(l.box(), "Reboot", fa, gc))
+                        {
+                            run = false;
+                            quit_action = quit_action::REBOOT;
+                        }
+                    }
+                    else
+                    {
+                        gc.draw_background(view_rect);
 
-                            v_layout vl(6, 4, pad_box(view_rect, 4));
-                            auto top_box = vl.box(5);
-                            vl.next(5);
+                        v_layout vl(6, 4, pad_box(view_rect, 4));
+                        auto top_box = vl.box(5);
+                        vl.next(5);
 
-                            unsigned int const item_skip = list_view_visible_items(top_box, fa_small);
+                        unsigned int const item_skip = list_view_visible_items(top_box, fa_small);
 
-                            if (current_view == view_type::PLAYLIST)
+                        if (current_view == view_type::PLAYLIST)
+                        {
+
+                            h_layout hl(3, 4, vl.box());
+
+                            if (text_button(hl.box(), "Jump", fa, gc))
+                                cpl_view_pos = current_song_pos >= 5 ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - item_skip)) : 0;
+                            hl.next();
+                            if (text_button(hl.box(), "▲", fa, gc))
+                                cpl_view_pos = dec_ensure_lower(cpl_view_pos - item_skip, cpl_view_pos, 0);
+                            hl.next();
+                            if (text_button(hl.box(), "▼", fa, gc))
+                                cpl_view_pos = inc_ensure_upper(cpl_view_pos + item_skip, cpl_view_pos, cpl.size() < item_skip ? 0 : cpl.size() - item_skip);
+
+                            int selection = list_view(top_box, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
+                            if (selection != -1)
+                                mpdc.play_position(selection);
+
+                            // TODO calculcate from text height (font ascent)
+                        }
+                        else if (current_view == view_type::SONG_SEARCH)
+                        {
+                            if (present_search_results)
                             {
-
                                 h_layout hl(3, 4, vl.box());
+                                if (text_button(hl.box(), "⌨", fa, gc))
+                                {
+                                    search_items.clear();
+                                    search_item_positions.clear();
+                                    search_term.clear();
+                                    present_search_results = false;
 
-                                if (text_button(hl.box(), "Jump", fa, gc))
-                                    cpl_view_pos = current_song_pos >= 5 ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - item_skip)) : 0;
+                                    // necessary evil
+                                    push_user_event(user_event_type, user_event::REFRESH);
+                                }
                                 hl.next();
                                 if (text_button(hl.box(), "▲", fa, gc))
-                                    cpl_view_pos = dec_ensure_lower(cpl_view_pos - item_skip, cpl_view_pos, 0);
+                                    search_items_view_pos = dec_ensure_lower(search_items_view_pos - item_skip, search_items_view_pos, 0);
                                 hl.next();
                                 if (text_button(hl.box(), "▼", fa, gc))
-                                    cpl_view_pos = inc_ensure_upper(cpl_view_pos + item_skip, cpl_view_pos, cpl.size() < item_skip ? 0 : cpl.size() - item_skip);
+                                    // TODO Down works with small result
+                                    search_items_view_pos = inc_ensure_upper(search_items_view_pos + item_skip, search_items_view_pos, search_items.size() < item_skip ? 0 : search_items.size() - item_skip);
 
-                                int selection = list_view(top_box, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
+                                int selection = list_view(top_box, search_items, search_items_view_pos, -1, fa_small, gc);
+
                                 if (selection != -1)
-                                    mpdc.play_position(selection);
-
-                                // TODO calculcate from text height (font ascent)
+                                    mpdc.play_position(search_item_positions[selection]);
                             }
-                            else if (current_view == view_type::SONG_SEARCH)
+                            else
                             {
-                                if (present_search_results)
+                                v_layout vl(6, 4, pad_box(view_rect, 4));
+
+                                auto top_box = vl.box();
+
+                                // draw keys
+                                std::array<char const * const, 5> letters
+                                    { "abcdef"
+                                    , "ghijkl"
+                                    , "mnopqr"
+                                    , "stuvwx"
+                                    , "yzäöü "
+                                    };
+                                vl.next();
+
+                                for (char const * row_ptr : letters)
                                 {
-                                    h_layout hl(3, 4, vl.box());
-                                    if (text_button(hl.box(), "⌨", fa, gc))
+                                    h_layout hl(6, 4, vl.box());
+                                    while (*row_ptr != 0)
                                     {
-                                        search_items.clear();
-                                        search_item_positions.clear();
+                                        // get a single utf8 encoded unicode character
+                                        char buff[8];
+
+                                        int const num_bytes = next_utf8(buff, row_ptr);
+
+                                        if (num_bytes == 0)
+                                            break;
+                                        else
+                                        {
+                                            if (text_button(hl.box(), buff, fa, gc))
+                                                search_term += buff;
+                                            hl.next();
+                                            row_ptr += num_bytes;
+                                        }
+                                    }
+                                    vl.next();
+                                }
+
+                                // render controls (such that a redraw is not necessary)
+                                {
+                                    h_layout hl(6, 4, top_box);
+                                    auto search_term_box = hl.box(4);
+
+                                    hl.next(4);
+
+                                    if (text_button(hl.box(), "⌫", fa, gc) && !search_term.empty())
+                                    {
+                                        int const len = count_utf8_backwards(search_term.c_str() + search_term.size() - 1);
+                                        search_term.resize(search_term.size() - len);
+                                    }
+                                    hl.next();
+                                    if (text_button(hl.box(), "⌧", fa, gc))
                                         search_term.clear();
-                                        present_search_results = false;
+
+                                    if (text_button(search_term_box, '\'' + search_term + '\'', fa, gc))
+                                    {
+                                        // do search
+                                        search_item_positions.clear();
+                                        for (std::size_t pos = 0; pos < cpl.size(); pos++)
+                                        {
+                                            auto const & s = cpl[pos];
+                                            if (icu::UnicodeString::fromUTF8(s).toLower().indexOf(icu::UnicodeString::fromUTF8(search_term)) != -1)
+                                            {
+                                                search_item_positions.push_back(pos);
+                                                search_items.push_back(s);
+                                            }
+                                        }
+
+                                        present_search_results = true;
+                                        search_items_view_pos = 0;
 
                                         // necessary evil
                                         push_user_event(user_event_type, user_event::REFRESH);
                                     }
-                                    hl.next();
-                                    if (text_button(hl.box(), "▲", fa, gc))
-                                        search_items_view_pos = dec_ensure_lower(search_items_view_pos - item_skip, search_items_view_pos, 0);
-                                    hl.next();
-                                    if (text_button(hl.box(), "▼", fa, gc))
-                                        // TODO Down works with small result
-                                        search_items_view_pos = inc_ensure_upper(search_items_view_pos + item_skip, search_items_view_pos, search_items.size() < item_skip ? 0 : search_items.size() - item_skip);
 
-                                    int selection = list_view(top_box, search_items, search_items_view_pos, -1, fa_small, gc);
-
-                                    if (selection != -1)
-                                        mpdc.play_position(search_item_positions[selection]);
-                                }
-                                else
-                                {
-                                    v_layout vl(6, 4, pad_box(view_rect, 4));
-
-                                    auto top_box = vl.box();
-
-                                    // draw keys
-                                    std::array<char const * const, 5> letters
-                                        { "abcdef"
-                                        , "ghijkl"
-                                        , "mnopqr"
-                                        , "stuvwx"
-                                        , "yzäöü "
-                                        };
-                                    vl.next();
-
-                                    for (char const * row_ptr : letters)
-                                    {
-                                        h_layout hl(6, 4, vl.box());
-                                        while (*row_ptr != 0)
-                                        {
-                                            // get a single utf8 encoded unicode character
-                                            char buff[8];
-
-                                            int const num_bytes = next_utf8(buff, row_ptr);
-
-                                            if (num_bytes == 0)
-                                                break;
-                                            else
-                                            {
-                                                if (text_button(hl.box(), buff, fa, gc))
-                                                    search_term += buff;
-                                                hl.next();
-                                                row_ptr += num_bytes;
-                                            }
-                                        }
-                                        vl.next();
-                                    }
-
-                                    // render controls (such that a redraw is not necessary)
-                                    {
-                                        h_layout hl(6, 4, top_box);
-                                        auto search_term_box = hl.box(4);
-
-                                        hl.next(4);
-
-                                        if (text_button(hl.box(), "⌫", fa, gc) && !search_term.empty())
-                                        {
-                                            int const len = count_utf8_backwards(search_term.c_str() + search_term.size() - 1);
-                                            search_term.resize(search_term.size() - len);
-                                        }
-                                        hl.next();
-                                        if (text_button(hl.box(), "⌧", fa, gc))
-                                            search_term.clear();
-
-                                        if (text_button(search_term_box, '\'' + search_term + '\'', fa, gc))
-                                        {
-                                            // do search
-                                            search_item_positions.clear();
-                                            for (std::size_t pos = 0; pos < cpl.size(); pos++)
-                                            {
-                                                auto const & s = cpl[pos];
-                                                if (icu::UnicodeString::fromUTF8(s).toLower().indexOf(icu::UnicodeString::fromUTF8(search_term)) != -1)
-                                                {
-                                                    search_item_positions.push_back(pos);
-                                                    search_items.push_back(s);
-                                                }
-                                            }
-
-                                            present_search_results = true;
-                                            search_items_view_pos = 0;
-
-                                            // necessary evil
-                                            push_user_event(user_event_type, user_event::REFRESH);
-                                        }
-
-                                    }
                                 }
                             }
                         }
-                        SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
                     }
+                    SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
                 }
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 
