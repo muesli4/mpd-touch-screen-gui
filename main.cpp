@@ -467,13 +467,13 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
     while (n < entries.size() && text_box.y < box.y + box.h)
     {
         int const overlap = (text_box.y + text_box.h) - (box.y + box.h);
-        int const h = text_box.h - (overlap < 0 ? 0 : overlap) - 1;
+        int const h = text_box.h - (overlap < 0 ? 0 : overlap + 1);
 
         SDL_Rect src_rect { 0, 0, text_box.w, h };
         SDL_Rect abs_rect {text_box.x, text_box.y, text_box.w, h};
 
         // favor pressed over active
-        if (pressed_in(text_box, gei))
+        if (pressed_in(abs_rect, gei))
             gc.draw_entry_pressed_background(abs_rect);
         else if (highlight == static_cast<int>(n))
             gc.draw_entry_active_background(abs_rect);
@@ -484,7 +484,7 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
         SDL_Rect tmp_rect = text_box;
         SDL_BlitSurface(text_surf_ptr.get(), &src_rect, gc.target_surface, &tmp_rect);
 
-        if (is_button_active(text_box, gei))
+        if (is_button_active(abs_rect, gei))
             selection = n;
 
         text_box.y += fa.font_line_skip();
