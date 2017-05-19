@@ -1,17 +1,23 @@
 #include <chrono>
 #include <thread>
 #include <memory>
+#include <cstring>
 
 #include "mpd_control.hpp"
 #include "util.hpp"
 
 
 mpd_control::mpd_control(std::function<void(std::string, unsigned int)> new_song_cb, std::function<void(bool)> random_cb)
-    : _c(mpd_connection_new(0, 0, 0))
+    : _c(mpd_connection_new(nullptr, 0, 0))
     , _run(true)
     , _new_song_cb(new_song_cb)
     , _random_cb(random_cb)
 {
+    if (mpd_connection_get_error(_c) != MPD_ERROR_SUCCESS)
+        throw std::runtime_error(
+            std::string("connecting to mpd failed:")
+            + mpd_connection_get_error_message(_c)
+        );
 }
 
 mpd_control::~mpd_control()
@@ -187,7 +193,9 @@ std::vector<std::string> mpd_control::get_current_playlist()
                     artist = mpd_song_get_tag(song, MPD_TAG_ALBUM_ARTIST, 0);
                 if (artist == nullptr)
                     artist = mpd_song_get_tag(song, MPD_TAG_COMPOSER, 0);
-                    
+                if (artist != nullptr && std::strcmp(artist, "Various Artists") == 0)
+                    artist = nullptr;
+
                 playlist.push_back(
                     (artist == nullptr ? "" : std::string(artist) + " - ")
                     + string_from_ptr(mpd_song_get_tag(song, MPD_TAG_TITLE, 0))
