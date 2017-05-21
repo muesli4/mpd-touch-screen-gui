@@ -224,6 +224,22 @@ enum quit_action
     NONE
 };
 
+quit_action shutdown_view(SDL_Rect box, font_atlas & fa, gui_context & gc)
+{
+    v_layout l(2, 4, pad_box(box, 44));
+
+    if (text_button(l.box(), "Shutdown", fa, gc))
+    {
+        return quit_action::SHUTDOWN;
+    }
+    l.next();
+    if (text_button(l.box(), "Reboot", fa, gc))
+    {
+        return quit_action::REBOOT;
+    }
+    return quit_action::NONE;
+}
+
 void push_user_event(uint32_t event_type, user_event ue)
 {
     SDL_Event e;
@@ -549,9 +565,7 @@ int main(int argc, char * argv[])
                     if (view_dirty || !cover_surface_ptr)
                     {
                         if (!cover_surface_ptr)
-                        {
                             std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, screen, fa, mpdc);
-                        }
                         SDL_Rect r = view_rect;
                         SDL_BlitSurface(cover_surface_ptr.get(), nullptr, screen, &r);
                         SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
@@ -561,29 +575,16 @@ int main(int argc, char * argv[])
                 }
                 else
                 {
+                    gc.draw_background(view_rect);
+
                     if (current_view == view_type::SHUTDOWN)
                     {
-                        gc.draw_background(view_rect);
-                        //SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 20, 200, 40));
-
-                        v_layout l(2, 4, pad_box(view_rect, 44));
-
-                        if (text_button(l.box(), "Shutdown", fa, gc))
-                        {
+                        quit_action = shutdown_view(view_rect, fa, gc);
+                        if (quit_action != quit_action::NONE)
                             run = false;
-                            quit_action = quit_action::SHUTDOWN;
-                        }
-                        l.next();
-                        if (text_button(l.box(), "Reboot", fa, gc))
-                        {
-                            run = false;
-                            quit_action = quit_action::REBOOT;
-                        }
                     }
                     else
                     {
-                        gc.draw_background(view_rect);
-
                         v_layout vl(6, 4, pad_box(view_rect, 4));
                         auto top_box = vl.box(5);
                         vl.next(5);
@@ -607,8 +608,6 @@ int main(int argc, char * argv[])
                             int selection = list_view(top_box, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
                             if (selection != -1)
                                 mpdc.play_position(selection);
-
-                            // TODO calculcate from text height (font ascent)
                         }
                         else if (current_view == view_type::SONG_SEARCH)
                         {
