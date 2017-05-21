@@ -375,75 +375,74 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
 }
 
 // TODO better name
-enum class action
+enum class swipe_action
 {
-    INC_VOLUME,
-    DEC_VOLUME,
-    NEXT_SONG,
-    PREV_SONG,
-    TOGGLE_PAUSE,
+    SWIPE_UP,
+    SWIPE_DOWN,
+    SWIPE_LEFT,
+    SWIPE_RIGHT,
+    PRESS,
     NONE
 };
 
-action swipe_area(SDL_Rect const & box, gui_event_info const & gei)
+swipe_action swipe_area(SDL_Rect const & box, gui_event_info const & gei)
 {
     if (gei.mouse_event && within_rect(gei.down_x, gei.down_y, box) && !gei.pressed)
     {
         // swipe detection
         if (gei.valid_swipe)
         {
-            // y is volume
             if (gei.abs_ydiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= gei.abs_xdiff)
             {
                 if (gei.ydiff < 0)
                 {
-                    return action::INC_VOLUME;
+                    return swipe_action::SWIPE_UP;
                 }
                 else
                 {
-                    return action::DEC_VOLUME;
+                    return swipe_action::SWIPE_DOWN;
                 }
             }
-            // x is song
             else if (gei.abs_xdiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= gei.abs_ydiff)
             {
                 if (gei.xdiff > 0)
                 {
-                    return action::NEXT_SONG;
+                    return swipe_action::SWIPE_RIGHT;
                 }
                 else
                 {
-                    return action::PREV_SONG;
+                    return swipe_action::SWIPE_LEFT;
                 }
             }
         }
-        // check if the finger didn't move a lot and whether we're not doing a swipe motion directly before
+        // check if the finger didn't move a lot and whether we're not doing a
+        // swipe motion directly before
         else if (swipe_is_press(gei))
         {
-            return action::TOGGLE_PAUSE;
+            return swipe_action::PRESS;
         }
     }
 
-    return action::NONE;
+    return swipe_action::NONE;
 }
 
-void handle_action(action a, mpd_control & mpdc, unsigned int volume_step)
+void handle_action(swipe_action a, mpd_control & mpdc, unsigned int volume_step)
 {
     switch (a)
     {
-        case action::INC_VOLUME:
+        case swipe_action::SWIPE_UP:
             mpdc.inc_volume(volume_step);
             break;
-        case action::DEC_VOLUME:
+        case swipe_action::SWIPE_DOWN:
             mpdc.dec_volume(volume_step);
             break;
-        case action::NEXT_SONG:
+        case swipe_action::SWIPE_RIGHT:
             mpdc.next_song();
             break;
-        case action::PREV_SONG:
+        case swipe_action::SWIPE_LEFT:
             mpdc.prev_song();
             break;
-        case action::TOGGLE_PAUSE:
+        case swipe_action::PRESS:
             mpdc.toggle_pause();
             break;
         default:
@@ -862,7 +861,7 @@ int main(int argc, char * argv[])
                 // view area
                 if (current_view == view_type::COVER_SWIPE)
                 {
-                    action a = swipe_area(view_rect, gei);
+                    swipe_action a = swipe_area(view_rect, gei);
 
                     // redraw cover if it is a new one or if marked dirty
                     if (view_dirty || !cover_surface_ptr)
