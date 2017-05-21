@@ -27,21 +27,28 @@
 #include "font_atlas.hpp"
 #include "gui.hpp"
 
+// future feature list and ideas:
+// TODO when hardware rendering is available replace blits with texture copy of the renderer
+//      for software it doesn't make sense, since the renderer will just make a
+//      copy of the surface to generate a pseudo-texture
+// TODO list view: fade out overlong text when over boundary or move source
+//                 rectangle with time / alternatively use manual controls (e.g., horizontal swipe)
+// TODO playlist view: use several tags and display in different cells:
+//          - use a header colum (expand when clicked)
+//          - scroll with swipe
+// TODO playlist view: jump to song position on new song
+// TODO move constants into config
+// TODO cover view: show a popup when an action has been executed (use timer to refresh)
+//                  this may also be used for a remote control, if a popup exists draw it
+//                  over everything, remove the popup with a timer by simply sending a refresh event
+
 #ifndef __arm__
-// test build to run on local machine
+// define this to test it on a local machine
 #define TEST_BUILD
 #endif
 
 // enable dimming functionality
 #define DIM_IDLE_TIMER
-
-// TODO when hardware rendering is available replace blits with texture copy of the renderer
-//      (for software it doesn't make sense, since the renderer will just make a copy of the surface to generate a texture)
-// TODO playlist: fade out song titles when over boundary or move source rectangle with time
-// TODO playlist: use several tags and display in different cells:
-//          - use a header colum (expand when clicked)
-//          - scroll with swipe
-// TODO move constants into config
 
 #ifdef TEST_BUILD
 char const * const BASE_DIR = "/home/moritz/Musik/";
@@ -325,7 +332,7 @@ void refresh_current_playlist(std::vector<std::string> & cpl, unsigned int & cpv
     cpv = pci.new_version;
     for (auto & p : pci.changed_positions)
     {
-        cpl[p.first].swap(p.second);
+        cpl[p.first] = p.second;
     }
 }
 
@@ -444,11 +451,7 @@ int main(int argc, char * argv[])
 
         std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
 
-        {
-            std::pair<std::vector<std::string>, unsigned int> playlist_data = mpdc.get_current_playlist();
-            cpl.swap(playlist_data.first);
-            cpv = playlist_data.second;
-        }
+        std::tie(cpl, cpv) = mpdc.get_current_playlist();
 
         font_atlas fa(DEFAULT_FONT_PATH, 20);
         font_atlas fa_small(DEFAULT_FONT_PATH, 15);

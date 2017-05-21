@@ -143,17 +143,12 @@ void mpd_control::set_random(bool value)
 
 bool mpd_control::get_random()
 {
-    typedef std::promise<bool> promise_type;
-    auto promise_ptr = std::make_shared<promise_type>();
-
-    add_external_task([promise_ptr](mpd_connection * c)
-    {
+    return add_external_task_with_return<bool>([](mpd_connection * c){
         mpd_status * s = mpd_run_status(c);
-        promise_ptr->set_value(mpd_status_get_random(s));
+        bool v = mpd_status_get_random(s);
         mpd_status_free(s);
+        return v;
     });
-
-    return promise_ptr->get_future().get();
 }
 
 std::string mpd_control::get_current_title()
@@ -187,10 +182,9 @@ std::string format_playlist_song(mpd_song * s)
 
 std::pair<std::vector<std::string>, unsigned int> mpd_control::get_current_playlist()
 {
-    typedef std::promise<std::pair<std::vector<std::string>, unsigned int>> promise_type;
-    auto promise_ptr = std::make_shared<promise_type>();
+    typedef std::pair<std::vector<std::string>, unsigned int> result_type;
 
-    add_external_task([promise_ptr](mpd_connection * c)
+    return add_external_task_with_return<result_type>([](mpd_connection * c)
     {
         mpd_status * status = mpd_run_status(c);
         std::vector<std::string> playlist;
@@ -206,22 +200,17 @@ std::pair<std::vector<std::string>, unsigned int> mpd_control::get_current_playl
             mpd_song_free(song);
         }
 
-        promise_ptr->set_value(
-            std::make_pair(std::move(playlist), mpd_status_get_queue_version(status))
-        );
+        auto version = mpd_status_get_queue_version(status);
         mpd_status_free(status);
+        return std::make_pair(playlist, version);
     });
-
-    return promise_ptr->get_future().get();
 }
 
 playlist_change_info mpd_control::get_current_playlist_changes(unsigned int version)
 {
-    typedef std::promise<playlist_change_info> promise_type;
-    auto promise_ptr = std::make_shared<promise_type>();
-
-    add_external_task([promise_ptr, version](mpd_connection * c)
+    return add_external_task_with_return<playlist_change_info>([version](mpd_connection * c)
     {
+
         mpd_status * status = mpd_run_status(c);
         playlist_change_info::diff_type changed_positions;
 
@@ -234,17 +223,11 @@ playlist_change_info mpd_control::get_current_playlist_changes(unsigned int vers
             mpd_song_free(song);
         }
 
-        promise_ptr->set_value(
-            playlist_change_info(
-                mpd_status_get_queue_version(status),
-                std::move(changed_positions),
-                mpd_status_get_queue_length(status)
-            )
-        );
+        auto qv = mpd_status_get_queue_version(status);
+        auto ql = mpd_status_get_queue_length(status);
         mpd_status_free(status);
+        return playlist_change_info(qv, std::move(changed_positions), ql);
     });
-
-    return promise_ptr->get_future().get();
 }
 
 std::string mpd_control::get_current_tag(enum mpd_tag_type type)
