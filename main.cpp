@@ -395,62 +395,61 @@ int main(int argc, char * argv[])
 
     SDL_Surface * screen = SDL_GetWindowSurface(window);
 
+    {
+        // loop state
+        std::string current_song_path;
+        bool random;
+        view_type current_view = view_type::COVER_SWIPE;
+        bool view_dirty = false;
+        unsigned int current_song_pos = 0;
+        unsigned int cpl_view_pos = 0;
+        std::vector<std::string> cpl;
+        unsigned int cpv;
+        bool current_playlist_needs_refresh = false;
 
-    // loop state
-    std::string current_song_path;
-    bool random;
-    view_type current_view = view_type::COVER_SWIPE;
-    bool view_dirty = false;
-    unsigned int current_song_pos = 0;
-    unsigned int cpl_view_pos = 0;
-    std::vector<std::string> cpl;
-    unsigned int cpv;
-    bool current_playlist_needs_refresh = false;
+        bool present_search_results = false;
+        std::string search_term;
+        std::vector<std::string> search_items;
+        unsigned int search_items_view_pos = 0;
+        std::vector<int> search_item_positions;
 
-    bool present_search_results = false;
-    std::string search_term;
-    std::vector<std::string> search_items;
-    unsigned int search_items_view_pos = 0;
-    std::vector<int> search_item_positions;
+        unique_surface_ptr cover_surface_ptr;
+        cover_type cover_type;
 
-    unique_surface_ptr cover_surface_ptr;
-    cover_type cover_type;
-
-    // TODO check for error?
-    uint32_t const user_event_type = SDL_RegisterEvents(1);
+        // TODO check for error?
+        uint32_t const user_event_type = SDL_RegisterEvents(1);
 #ifdef DIM_IDLE_TIMER
-    idle_timer_info iti(user_event_type);
-    bool dimmed = true;
-    // act as if the timer expired and it should dim now
-    push_user_event(user_event_type, user_event::TIMER_EXPIRED);
+        idle_timer_info iti(user_event_type);
+        bool dimmed = true;
+        // act as if the timer expired and it should dim now
+        push_user_event(user_event_type, user_event::TIMER_EXPIRED);
 #endif
 
-    mpd_control mpdc(
-        [&](std::string const & uri, unsigned int pos)
+        mpd_control mpdc(
+            [&](std::string const & uri, unsigned int pos)
+            {
+                push_user_event(user_event_type, user_event::SONG_CHANGED);
+                current_song_path = uri;
+                current_song_pos = pos;
+            },
+            [&](bool value)
+            {
+                push_change_event(user_event_type, user_event::RANDOM_CHANGED, random, value);
+            },
+            [&]()
+            {
+                push_user_event(user_event_type, user_event::PLAYLIST_CHANGED);
+            }
+        );
+
+        std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
+
         {
-            push_user_event(user_event_type, user_event::SONG_CHANGED);
-            current_song_path = uri;
-            current_song_pos = pos;
-        },
-        [&](bool value)
-        {
-            push_change_event(user_event_type, user_event::RANDOM_CHANGED, random, value);
-        },
-        [&]()
-        {
-            push_user_event(user_event_type, user_event::PLAYLIST_CHANGED);
+            std::pair<std::vector<std::string>, unsigned int> playlist_data = mpdc.get_current_playlist();
+            cpl.swap(playlist_data.first);
+            cpv = playlist_data.second;
         }
-    );
 
-    std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
-
-    {
-        std::pair<std::vector<std::string>, unsigned int> playlist_data = mpdc.get_current_playlist();
-        cpl.swap(playlist_data.first);
-        cpv = playlist_data.second;
-    }
-
-    {
         font_atlas fa(DEFAULT_FONT_PATH, 20);
         font_atlas fa_small(DEFAULT_FONT_PATH, 15);
         gui_event_info gei;
@@ -629,7 +628,6 @@ int main(int argc, char * argv[])
                                     search_items_view_pos = dec_ensure_lower(search_items_view_pos - item_skip, search_items_view_pos, 0);
                                 hl.next();
                                 if (text_button(hl.box(), "▼", fa, gc))
-                                    // TODO Down works with small result
                                     search_items_view_pos = inc_ensure_upper(search_items_view_pos + item_skip, search_items_view_pos, search_items.size() < item_skip ? 0 : search_items.size() - item_skip);
 
                                 int selection = list_view(top_box, search_items, search_items_view_pos, -1, fa_small, gc);
@@ -658,10 +656,9 @@ int main(int argc, char * argv[])
                                     h_layout hl(6, 4, vl.box());
                                     while (*row_ptr != 0)
                                     {
-                                        // get a single utf8 encoded unicode character
                                         char buff[8];
 
-                                        int const num_bytes = next_utf8(buff, row_ptr);
+                                        int const num_bytes = fetch_utf8(buff, row_ptr);
 
                                         if (num_bytes == 0)
                                             break;
@@ -721,10 +718,10 @@ int main(int argc, char * argv[])
                 }
             }
         }
-    }
 
-    mpdc.stop();
-    mpdc_thread.join();
+        mpdc.stop();
+        mpdc_thread.join();
+    }
 
     TTF_CloseFont(font);
     TTF_Quit();

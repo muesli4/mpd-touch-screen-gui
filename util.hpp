@@ -20,7 +20,8 @@ std::string string_from_ptr(char const * const ptr);
 
 int utf8_byte_count(uint8_t start_byte);
 
-int next_utf8(char * buff, char const * ptr);
+// get the current utf8 character, write it into the buffer and return its length
+int fetch_utf8(char * buff, char const * ptr);
 
 bool is_utf8_following_byte(uint8_t b);
 

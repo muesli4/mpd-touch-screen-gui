@@ -53,7 +53,7 @@ int utf8_byte_count(uint8_t start_byte)
 }
 
 // extracts a utf8 character writes it to buff and return the length
-int next_utf8(char * buff, char const * ptr)
+int fetch_utf8(char * buff, char const * ptr)
 {
     if (*ptr == 0)
     {
