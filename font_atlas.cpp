@@ -4,6 +4,7 @@
 
 #include "font_atlas.hpp"
 #include "util.hpp"
+#include "sdl_util.hpp"
 
 font_not_found::font_not_found(std::string msg)
     : std::runtime_error("font not found: " + msg)
@@ -173,7 +174,7 @@ std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> font_atlas::text(std::strin
             int const target_height = font_line_skip() * static_cast<int>(widths.size());
 
             // TODO move and use create_similar_surface
-            result = SDL_CreateRGBSurfaceWithFormat(0, target_width, target_height, 32, SDL_PIXELFORMAT_RGBA32);
+            result = create_similar_surface(surfaces[0], target_width, target_height);
 
             int x = 0;
             int y = 0;
