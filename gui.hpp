@@ -36,7 +36,7 @@ struct gui_event_info
 };
 
 // TODO add as method to class
-void apply_sdl_event(SDL_Event & e, gui_event_info & gei, int swipe_threshold_low_x, int swipe_threshold_low_y)
+void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_threshold_low_x, unsigned int swipe_threshold_low_y)
 {
     if (e.type == SDL_MOUSEBUTTONDOWN)
     {
