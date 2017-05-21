@@ -71,7 +71,7 @@ unsigned int const SWIPE_THRESHOLD_LOW_Y = SWIPE_THRESHOLD_LOW_X;
 double const DIR_UNAMBIG_FACTOR_THRESHOLD = 0.3;
 
 // the time to wait after a swipe, before allowing touch events
-unsigned int const SWIPE_WAIT_DEBOUNCE_MS_THRESHOLD = 400;
+std::chrono::milliseconds const SWIPE_WAIT_DEBOUNCE_THRESHOLD(400);
 
 // determines how long a swipe is still recognized as a touch
 unsigned int const TOUCH_DISTANCE_THRESHOLD_HIGH = 10;
@@ -453,7 +453,7 @@ int main(int argc, char * argv[])
         font_atlas fa(DEFAULT_FONT_PATH, 20);
         font_atlas fa_small(DEFAULT_FONT_PATH, 15);
         gui_event_info gei;
-        gui_context gc(gei, screen, DIR_UNAMBIG_FACTOR_THRESHOLD, TOUCH_DISTANCE_THRESHOLD_HIGH, SWIPE_WAIT_DEBOUNCE_MS_THRESHOLD);
+        gui_context gc(gei, screen, DIR_UNAMBIG_FACTOR_THRESHOLD, TOUCH_DISTANCE_THRESHOLD_HIGH, SWIPE_WAIT_DEBOUNCE_THRESHOLD);
 
         bool run = true;
         SDL_Event ev;

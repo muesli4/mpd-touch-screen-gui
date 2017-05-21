@@ -78,13 +78,13 @@ struct gui_context
         SDL_Surface * s,
         double dir_unambig_factor_threshold,
         unsigned int touch_distance_threshold_high,
-        unsigned int swipe_wait_debounce_ms_threshold
+        std::chrono::milliseconds swipe_wait_debounce_threshold
     )
         : gei(gei)
         , target_surface(s)
         , dir_unambig_factor_threshold(dir_unambig_factor_threshold)
         , touch_distance_threshold_high(touch_distance_threshold_high)
-        , swipe_wait_debounce_ms_threshold(swipe_wait_debounce_ms_threshold)
+        , swipe_wait_debounce_threshold(swipe_wait_debounce_threshold)
         , button_bg_color{25, 25, 25}//{230, 230, 230}
         , button_fg_color{235, 235, 235}//{20, 20, 20}
         , button_frame_color{105, 105, 105}//{150, 150, 150}
@@ -166,7 +166,7 @@ struct gui_context
     SDL_Renderer * renderer;
     double dir_unambig_factor_threshold;
     unsigned int touch_distance_threshold_high;
-    unsigned int swipe_wait_debounce_ms_threshold;
+    std::chrono::milliseconds swipe_wait_debounce_threshold;
 
     private:
     void set_color(SDL_Color c)
@@ -240,7 +240,7 @@ bool swipe_is_press(gui_context const & gc)
            && gei.abs_ydiff < gc.touch_distance_threshold_high
            && std::chrono::duration_cast<std::chrono::milliseconds>(
                   gei.up_time_point - gei.last_swipe_time_point
-              ).count() > gc.swipe_wait_debounce_ms_threshold;
+              ) > gc.swipe_wait_debounce_threshold;
 }
 
 enum class swipe_action
