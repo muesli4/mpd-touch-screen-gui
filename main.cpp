@@ -187,17 +187,6 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei)
     }
 }
 
-bool swipe_is_press(gui_context const & gc)
-{
-    gui_event_info const & gei = gc.gei;
-    // a touch display is inaccurate, a press with a finger might be interpreted as swipe
-    return gei.abs_xdiff < gc.touch_distance_threshold_high
-           && gei.abs_ydiff < gc.touch_distance_threshold_high
-           && std::chrono::duration_cast<std::chrono::milliseconds>(
-                  gei.up_time_point - gei.last_swipe_time_point
-              ).count() > gc.swipe_wait_debounce_ms_threshold;
-}
-
 // check overflow and ensure at most upper_bound
 unsigned int inc_ensure_upper(unsigned int new_pos, unsigned int old_pos, unsigned int upper_bound)
 {
@@ -229,7 +218,7 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
 
     bool const swipe = gei.valid_swipe && gei.mouse_event && within_rect(gei.down_x, gei.down_y, box) && !gei.pressed;
     // hacky update before drawing...
-    if (swipe && gei.abs_ydiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= gei.abs_xdiff)
+    if (swipe && gei.abs_ydiff * gc.dir_unambig_factor_threshold >= gei.abs_xdiff)
     {
         int const distance = static_cast<int>(visible_items) * 10 * gei.ydiff / (box.w / 2);
         unsigned int const next_pos = pos + distance;
@@ -281,58 +270,6 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
     return swipe ? -1 : selection;
 }
 
-enum class swipe_action
-{
-    SWIPE_UP,
-    SWIPE_DOWN,
-    SWIPE_LEFT,
-    SWIPE_RIGHT,
-    PRESS,
-    NONE
-};
-
-swipe_action swipe_area(SDL_Rect const & box, gui_context const & gc)
-{
-    gui_event_info const & gei = gc.gei;
-    if (gei.mouse_event && within_rect(gei.down_x, gei.down_y, box) && !gei.pressed)
-    {
-        // swipe detection
-        if (gei.valid_swipe)
-        {
-            if (gei.abs_ydiff * gc.dir_unambig_factor_threshold >= gei.abs_xdiff)
-            {
-                if (gei.ydiff < 0)
-                {
-                    return swipe_action::SWIPE_UP;
-                }
-                else
-                {
-                    return swipe_action::SWIPE_DOWN;
-                }
-            }
-            else if (gei.abs_xdiff * gc.dir_unambig_factor_threshold >= gei.abs_ydiff)
-            {
-                if (gei.xdiff > 0)
-                {
-                    return swipe_action::SWIPE_RIGHT;
-                }
-                else
-                {
-                    return swipe_action::SWIPE_LEFT;
-                }
-            }
-        }
-        // check if the finger didn't move a lot and whether we're not doing a
-        // swipe motion directly before
-        else if (swipe_is_press(gc))
-        {
-            return swipe_action::PRESS;
-        }
-    }
-
-    return swipe_action::NONE;
-}
-
 void handle_action(swipe_action a, mpd_control & mpdc, unsigned int volume_step)
 {
     switch (a)
@@ -380,67 +317,6 @@ enum class user_event
 #endif
     REFRESH
 };
-
-// produce boxes to equally space widgets horizontally
-struct base_layout
-{
-    base_layout(unsigned int n, unsigned int spacing, SDL_Rect const & outer_box, int side)
-        : _spacing(spacing)
-        , _box_len(static_cast<double>(side - (n - 1) * spacing) / n)
-        , _box_num(0)
-        , _outer_box(outer_box)
-    {
-    }
-
-    void next(int n = 1)
-    {
-        _box_num += n;
-    }
-
-    protected:
-
-    int _spacing;
-    double _box_len;
-    double _box_num;
-    SDL_Rect _outer_box;
-};
-
-struct v_layout : base_layout
-{
-    v_layout(unsigned int n, unsigned int spacing, SDL_Rect const & outer_box)
-        : base_layout(n, spacing, outer_box, outer_box.h)
-    {
-    }
-
-    SDL_Rect box(int n = 1)
-    {
-        int const h = static_cast<int>(_box_len * n) + _spacing * (n - 1);
-        int const y = _outer_box.y + _box_num * (_box_len + _spacing);
-        SDL_Rect res { _outer_box.x, y, _outer_box.w, h };
-        return res;
-    }
-};
-
-struct h_layout : base_layout
-{
-    h_layout(unsigned int n, unsigned int spacing, SDL_Rect const & outer_box)
-        : base_layout(n, spacing, outer_box, outer_box.w)
-    {
-    }
-
-    SDL_Rect box(int n = 1)
-    {
-        int const w = static_cast<int>(_box_len * n) + _spacing * (n - 1);
-        int const x = _outer_box.x + _box_num * (_box_len + _spacing);
-        SDL_Rect res { x, _outer_box.y, w, _outer_box.h };
-        return res;
-    }
-};
-
-SDL_Rect pad_box(SDL_Rect box, int padding)
-{
-    return { box.x + padding, box.y + padding, box.w - 2 * padding, box.h - 2 * padding };
-}
 
 enum quit_action
 {

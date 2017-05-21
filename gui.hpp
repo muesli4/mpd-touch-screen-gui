@@ -194,3 +194,128 @@ bool image_button( SDL_Rect box
     SDL_BlitSurface(pressed_in(box, gc.gei) ? pressed_surf : idle_surf, nullptr, gc.target_surface, &box);
     return is_button_active(box, gc.gei);
 }
+
+bool swipe_is_press(gui_context const & gc)
+{
+    gui_event_info const & gei = gc.gei;
+    // a touch display is inaccurate, a press with a finger might be interpreted as swipe
+    return gei.abs_xdiff < gc.touch_distance_threshold_high
+           && gei.abs_ydiff < gc.touch_distance_threshold_high
+           && std::chrono::duration_cast<std::chrono::milliseconds>(
+                  gei.up_time_point - gei.last_swipe_time_point
+              ).count() > gc.swipe_wait_debounce_ms_threshold;
+}
+
+enum class swipe_action
+{
+    SWIPE_UP,
+    SWIPE_DOWN,
+    SWIPE_LEFT,
+    SWIPE_RIGHT,
+    PRESS,
+    NONE
+};
+
+swipe_action swipe_area(SDL_Rect const & box, gui_context const & gc)
+{
+    gui_event_info const & gei = gc.gei;
+    if (gei.mouse_event && within_rect(gei.down_x, gei.down_y, box) && !gei.pressed)
+    {
+        // swipe detection
+        if (gei.valid_swipe)
+        {
+            if (gei.abs_ydiff * gc.dir_unambig_factor_threshold >= gei.abs_xdiff)
+            {
+                if (gei.ydiff < 0)
+                {
+                    return swipe_action::SWIPE_UP;
+                }
+                else
+                {
+                    return swipe_action::SWIPE_DOWN;
+                }
+            }
+            else if (gei.abs_xdiff * gc.dir_unambig_factor_threshold >= gei.abs_ydiff)
+            {
+                if (gei.xdiff > 0)
+                {
+                    return swipe_action::SWIPE_RIGHT;
+                }
+                else
+                {
+                    return swipe_action::SWIPE_LEFT;
+                }
+            }
+        }
+        // check if the finger didn't move a lot and whether we're not doing a
+        // swipe motion directly before
+        else if (swipe_is_press(gc))
+        {
+            return swipe_action::PRESS;
+        }
+    }
+
+    return swipe_action::NONE;
+}
+
+// produce boxes to equally space widgets horizontally
+struct base_layout
+{
+    base_layout(unsigned int n, unsigned int spacing, SDL_Rect const & outer_box, int side)
+        : _spacing(spacing)
+        , _box_len(static_cast<double>(side - (n - 1) * spacing) / n)
+        , _box_num(0)
+        , _outer_box(outer_box)
+    {
+    }
+
+    void next(int n = 1)
+    {
+        _box_num += n;
+    }
+
+    protected:
+
+    int _spacing;
+    double _box_len;
+    double _box_num;
+    SDL_Rect _outer_box;
+};
+
+struct v_layout : base_layout
+{
+    v_layout(unsigned int n, unsigned int spacing, SDL_Rect const & outer_box)
+        : base_layout(n, spacing, outer_box, outer_box.h)
+    {
+    }
+
+    SDL_Rect box(int n = 1)
+    {
+        int const h = static_cast<int>(_box_len * n) + _spacing * (n - 1);
+        int const y = _outer_box.y + _box_num * (_box_len + _spacing);
+        SDL_Rect res { _outer_box.x, y, _outer_box.w, h };
+        return res;
+    }
+};
+
+struct h_layout : base_layout
+{
+    h_layout(unsigned int n, unsigned int spacing, SDL_Rect const & outer_box)
+        : base_layout(n, spacing, outer_box, outer_box.w)
+    {
+    }
+
+    SDL_Rect box(int n = 1)
+    {
+        int const w = static_cast<int>(_box_len * n) + _spacing * (n - 1);
+        int const x = _outer_box.x + _box_num * (_box_len + _spacing);
+        SDL_Rect res { x, _outer_box.y, w, _outer_box.h };
+        return res;
+    }
+};
+
+SDL_Rect pad_box(SDL_Rect box, int padding)
+{
+    return { box.x + padding, box.y + padding, box.w - 2 * padding, box.h - 2 * padding };
+}
+
