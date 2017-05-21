@@ -60,7 +60,7 @@ char const * const UNDIM_CMD = "display-pwm.sh 0";
 #ifdef DIM_IDLE_TIMER
 // after the delay without activity DIM_CMD is executed, once user input happens
 // again, UNDIM_CMD is executed
-std::chrono::milliseconds const IDLE_TIMER_DELAY_MS(60000);
+std::chrono::minutes const IDLE_TIMER_DELAY(3);
 #endif
 
 // determines the minimum length of a swipe
@@ -521,7 +521,7 @@ int main(int argc, char * argv[])
                         dimmed = false;
                         system(UNDIM_CMD);
                         iti.sync();
-                        SDL_AddTimer(IDLE_TIMER_DELAY_MS.count(), idle_timer_cb, &iti);
+                        SDL_AddTimer(std::chrono::milliseconds(IDLE_TIMER_DELAY).count(), idle_timer_cb, &iti);
                         continue;
                     }
                     else
