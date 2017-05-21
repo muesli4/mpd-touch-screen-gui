@@ -144,17 +144,14 @@ void mpd_control::set_random(bool value)
 bool mpd_control::get_random()
 {
     typedef std::promise<bool> promise_type;
-    std::shared_ptr<promise_type> promise_ptr = std::make_shared<promise_type>();
+    auto promise_ptr = std::make_shared<promise_type>();
 
+    add_external_task([promise_ptr](mpd_connection * c)
     {
-        scoped_lock lock(_external_tasks_mutex);
-        _external_tasks.push_back([promise_ptr](mpd_connection * c)
-        {
-            mpd_status * s = mpd_run_status(c);
-            promise_ptr->set_value(mpd_status_get_random(s));
-            mpd_status_free(s);
-        });
-    }
+        mpd_status * s = mpd_run_status(c);
+        promise_ptr->set_value(mpd_status_get_random(s));
+        mpd_status_free(s);
+    });
 
     return promise_ptr->get_future().get();
 }
@@ -191,32 +188,29 @@ std::string format_playlist_song(mpd_song * s)
 std::pair<std::vector<std::string>, unsigned int> mpd_control::get_current_playlist()
 {
     typedef std::promise<std::pair<std::vector<std::string>, unsigned int>> promise_type;
-    std::shared_ptr<promise_type> promise_ptr = std::make_shared<promise_type>();
+    auto promise_ptr = std::make_shared<promise_type>();
 
+    add_external_task([promise_ptr](mpd_connection * c)
     {
-        scoped_lock lock(_external_tasks_mutex);
-        _external_tasks.push_back([promise_ptr](mpd_connection * c)
+        mpd_status * status = mpd_run_status(c);
+        std::vector<std::string> playlist;
+        playlist.reserve(mpd_status_get_queue_length(status));
+
+        mpd_send_list_queue_meta(c);
+
+        mpd_song * song;
+        while ((song = mpd_recv_song(c)) != nullptr)
         {
-            mpd_status * status = mpd_run_status(c);
-            std::vector<std::string> playlist;
-            playlist.reserve(mpd_status_get_queue_length(status));
 
-            mpd_send_list_queue_meta(c);
+            playlist.push_back(format_playlist_song(song));
+            mpd_song_free(song);
+        }
 
-            mpd_song * song;
-            while ((song = mpd_recv_song(c)) != nullptr)
-            {
-
-                playlist.push_back(format_playlist_song(song));
-                mpd_song_free(song);
-            }
-
-            promise_ptr->set_value(
-                std::make_pair(std::move(playlist), mpd_status_get_queue_version(status))
-            );
-            mpd_status_free(status);
-        });
-    }
+        promise_ptr->set_value(
+            std::make_pair(std::move(playlist), mpd_status_get_queue_version(status))
+        );
+        mpd_status_free(status);
+    });
 
     return promise_ptr->get_future().get();
 }
@@ -224,34 +218,31 @@ std::pair<std::vector<std::string>, unsigned int> mpd_control::get_current_playl
 playlist_change_info mpd_control::get_current_playlist_changes(unsigned int version)
 {
     typedef std::promise<playlist_change_info> promise_type;
-    std::shared_ptr<promise_type> promise_ptr = std::make_shared<promise_type>();
+    auto promise_ptr = std::make_shared<promise_type>();
 
+    add_external_task([promise_ptr, version](mpd_connection * c)
     {
-        scoped_lock lock(_external_tasks_mutex);
-        _external_tasks.push_back([promise_ptr, version](mpd_connection * c)
+        mpd_status * status = mpd_run_status(c);
+        playlist_change_info::diff_type changed_positions;
+
+        mpd_send_queue_changes_meta(c, version);
+
+        mpd_song * song;
+        while ((song = mpd_recv_song(c)) != nullptr)
         {
-            mpd_status * status = mpd_run_status(c);
-            playlist_change_info::diff_type changed_positions;
+            changed_positions.emplace_back(mpd_song_get_pos(song), format_playlist_song(song));
+            mpd_song_free(song);
+        }
 
-            mpd_send_queue_changes_meta(c, version);
-
-            mpd_song * song;
-            while ((song = mpd_recv_song(c)) != nullptr)
-            {
-                changed_positions.emplace_back(mpd_song_get_pos(song), format_playlist_song(song));
-                mpd_song_free(song);
-            }
-
-            promise_ptr->set_value(
-                playlist_change_info(
-                    mpd_status_get_queue_version(status),
-                    std::move(changed_positions),
-                    mpd_status_get_queue_length(status)
-                )
-            );
-            mpd_status_free(status);
-        });
-    }
+        promise_ptr->set_value(
+            playlist_change_info(
+                mpd_status_get_queue_version(status),
+                std::move(changed_positions),
+                mpd_status_get_queue_length(status)
+            )
+        );
+        mpd_status_free(status);
+    });
 
     return promise_ptr->get_future().get();
 }
@@ -259,7 +250,7 @@ playlist_change_info mpd_control::get_current_playlist_changes(unsigned int vers
 std::string mpd_control::get_current_tag(enum mpd_tag_type type)
 {
     typedef std::promise<std::string> promise_type;
-    std::shared_ptr<promise_type> promise_ptr = std::make_shared<promise_type>();
+    auto promise_ptr = std::make_shared<promise_type>();
 
     {
         scoped_lock lock(_external_song_queries_mutex);
@@ -273,7 +264,6 @@ std::string mpd_control::get_current_tag(enum mpd_tag_type type)
 
     return promise_ptr->get_future().get();
 }
-
 
 void mpd_control::add_external_task(std::function<void(mpd_connection *)> t)
 {
