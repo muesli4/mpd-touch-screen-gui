@@ -36,9 +36,18 @@ struct gui_event_info
 
 struct gui_context
 {
-    gui_context(gui_event_info const & gei, SDL_Surface * s)
+    gui_context(
+        gui_event_info const & gei,
+        SDL_Surface * s,
+        double dir_unambig_factor_threshold,
+        unsigned int touch_distance_threshold_high,
+        unsigned int swipe_wait_debounce_ms_threshold
+    )
         : gei(gei)
         , target_surface(s)
+        , dir_unambig_factor_threshold(dir_unambig_factor_threshold)
+        , touch_distance_threshold_high(touch_distance_threshold_high)
+        , swipe_wait_debounce_ms_threshold(swipe_wait_debounce_ms_threshold)
         , button_bg_color{25, 25, 25}//{230, 230, 230}
         , button_fg_color{235, 235, 235}//{20, 20, 20}
         , button_frame_color{105, 105, 105}//{150, 150, 150}
@@ -48,6 +57,7 @@ struct gui_context
         , entry_selected_bg_color{250, 200, 200}
         , bg_color{0, 0, 0} //250, 250, 250}
         , active_color{230, 230, 255}
+
     {
         renderer = SDL_CreateSoftwareRenderer(s);
     }
@@ -117,6 +127,9 @@ struct gui_context
     gui_event_info const & gei;
     SDL_Surface * target_surface;
     SDL_Renderer * renderer;
+    double dir_unambig_factor_threshold;
+    unsigned int touch_distance_threshold_high;
+    unsigned int swipe_wait_debounce_ms_threshold;
 
     private:
     void set_color(SDL_Color c)
@@ -137,3 +150,47 @@ struct gui_context
     SDL_Color active_color;
 };
 
+bool within_rect(int x, int y, SDL_Rect const & r)
+{
+    return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+}
+
+bool pressed_and_released_in(SDL_Rect box, gui_event_info const & gei)
+{
+    // both clicks lie within box
+    return !gei.pressed && within_rect(gei.event_x, gei.event_y, box) && within_rect(gei.down_x, gei.down_y, box);
+    // TODO check whether the previous one was a mouse down event
+}
+
+bool pressed_in(SDL_Rect box, gui_event_info const & gei)
+{
+    return gei.pressed && within_rect(gei.event_x, gei.event_y, box);
+}
+
+bool is_button_active(SDL_Rect box, gui_event_info const & gei)
+{
+    return gei.mouse_event && pressed_and_released_in(box, gei);
+}
+
+bool text_button( SDL_Rect box
+                , std::string text
+                , font_atlas & fa
+                , gui_context & gc
+                )
+{
+    gc.draw_button_box(box, pressed_in(box, gc.gei));
+    if (!text.empty())
+        gc.draw_button_text(box, text, fa);
+
+    return is_button_active(box, gc.gei);
+}
+
+bool image_button( SDL_Rect box
+                 , SDL_Surface * idle_surf
+                 , SDL_Surface * pressed_surf
+                 , gui_context & gc
+                 )
+{
+    SDL_BlitSurface(pressed_in(box, gc.gei) ? pressed_surf : idle_surf, nullptr, gc.target_surface, &box);
+    return is_button_active(box, gc.gei);
+}

@@ -187,59 +187,15 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei)
     }
 }
 
-bool swipe_is_press(gui_event_info const & gei)
+bool swipe_is_press(gui_context const & gc)
 {
+    gui_event_info const & gei = gc.gei;
     // a touch display is inaccurate, a press with a finger might be interpreted as swipe
-    return gei.abs_xdiff < TOUCH_DISTANCE_THRESHOLD_HIGH
-           && gei.abs_ydiff < TOUCH_DISTANCE_THRESHOLD_HIGH
+    return gei.abs_xdiff < gc.touch_distance_threshold_high
+           && gei.abs_ydiff < gc.touch_distance_threshold_high
            && std::chrono::duration_cast<std::chrono::milliseconds>(
                   gei.up_time_point - gei.last_swipe_time_point
-              ).count() > SWIPE_WAIT_DEBOUNCE_MS_THRESHOLD;
-}
-
-bool within_rect(int x, int y, SDL_Rect const & r)
-{
-    return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-}
-
-bool pressed_and_released_in(SDL_Rect box, gui_event_info const & gei)
-{
-    // both clicks lie within box
-    return !gei.pressed && within_rect(gei.event_x, gei.event_y, box) && within_rect(gei.down_x, gei.down_y, box);
-    // TODO check whether the previous one was a mouse down event
-}
-
-bool pressed_in(SDL_Rect box, gui_event_info const & gei)
-{
-    return gei.pressed && within_rect(gei.event_x, gei.event_y, box);
-}
-
-bool is_button_active(SDL_Rect box, gui_event_info const & gei)
-{
-    return gei.mouse_event && pressed_and_released_in(box, gei);
-}
-
-bool text_button( SDL_Rect box
-                , std::string text
-                , font_atlas & fa
-                , gui_context & gc
-                )
-{
-    gc.draw_button_box(box, pressed_in(box, gc.gei));
-    if (!text.empty())
-        gc.draw_button_text(box, text, fa);
-
-    return is_button_active(box, gc.gei);
-}
-
-bool image_button( SDL_Rect box
-                 , SDL_Surface * idle_surf
-                 , SDL_Surface * pressed_surf
-                 , gui_context & gc
-                 )
-{
-    SDL_BlitSurface(pressed_in(box, gc.gei) ? pressed_surf : idle_surf, nullptr, gc.target_surface, &box);
-    return is_button_active(box, gc.gei);
+              ).count() > gc.swipe_wait_debounce_ms_threshold;
 }
 
 // check overflow and ensure at most upper_bound
@@ -335,14 +291,15 @@ enum class swipe_action
     NONE
 };
 
-swipe_action swipe_area(SDL_Rect const & box, gui_event_info const & gei)
+swipe_action swipe_area(SDL_Rect const & box, gui_context const & gc)
 {
+    gui_event_info const & gei = gc.gei;
     if (gei.mouse_event && within_rect(gei.down_x, gei.down_y, box) && !gei.pressed)
     {
         // swipe detection
         if (gei.valid_swipe)
         {
-            if (gei.abs_ydiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= gei.abs_xdiff)
+            if (gei.abs_ydiff * gc.dir_unambig_factor_threshold >= gei.abs_xdiff)
             {
                 if (gei.ydiff < 0)
                 {
@@ -353,7 +310,7 @@ swipe_action swipe_area(SDL_Rect const & box, gui_event_info const & gei)
                     return swipe_action::SWIPE_DOWN;
                 }
             }
-            else if (gei.abs_xdiff * DIR_UNAMBIG_FACTOR_THRESHOLD >= gei.abs_ydiff)
+            else if (gei.abs_xdiff * gc.dir_unambig_factor_threshold >= gei.abs_ydiff)
             {
                 if (gei.xdiff > 0)
                 {
@@ -367,7 +324,7 @@ swipe_action swipe_area(SDL_Rect const & box, gui_event_info const & gei)
         }
         // check if the finger didn't move a lot and whether we're not doing a
         // swipe motion directly before
-        else if (swipe_is_press(gei))
+        else if (swipe_is_press(gc))
         {
             return swipe_action::PRESS;
         }
@@ -706,7 +663,7 @@ int main(int argc, char * argv[])
         font_atlas fa(DEFAULT_FONT_PATH, 20);
         font_atlas fa_small(DEFAULT_FONT_PATH, 15);
         gui_event_info gei;
-        gui_context gc(gei, screen);
+        gui_context gc(gei, screen, DIR_UNAMBIG_FACTOR_THRESHOLD, TOUCH_DISTANCE_THRESHOLD_HIGH, SWIPE_WAIT_DEBOUNCE_MS_THRESHOLD);
 
         bool run = true;
         SDL_Event ev;
@@ -811,7 +768,7 @@ int main(int argc, char * argv[])
                 // view area
                 if (current_view == view_type::COVER_SWIPE)
                 {
-                    swipe_action a = swipe_area(view_rect, gei);
+                    swipe_action a = swipe_area(view_rect, gc);
 
                     // redraw cover if it is a new one or if marked dirty
                     if (view_dirty || !cover_surface_ptr)
