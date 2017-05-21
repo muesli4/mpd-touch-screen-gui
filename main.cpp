@@ -522,7 +522,9 @@ int main(int argc, char * argv[])
                         system(UNDIM_CMD);
                         iti.sync();
                         SDL_AddTimer(std::chrono::milliseconds(IDLE_TIMER_DELAY).count(), idle_timer_cb, &iti);
-                        continue;
+                        // force a refresh
+                        ev.type = user_event_type;
+                        ev.user.code = static_cast<int>(user_event::REFRESH);
                     }
                     else
                     {
