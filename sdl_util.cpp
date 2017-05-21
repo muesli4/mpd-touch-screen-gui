@@ -1,4 +1,16 @@
+#include <iostream>
+
 #include "sdl_util.hpp"
+
+void surface_deleter::operator()(SDL_Surface * s)
+{
+    SDL_FreeSurface(s);
+}
+
+void print_rect(SDL_Rect const & r)
+{
+    std::cout << r.x << " " << r.y << " on " << r.w << "x" << r.h << std::endl;
+}
 
 SDL_Surface * create_similar_surface(SDL_Surface const * s, int width, int height)
 {

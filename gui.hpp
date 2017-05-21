@@ -4,6 +4,8 @@
 
 #include <SDL2/SDL.h>
 
+#include "util.hpp"
+
 struct gui_event_info
 {
     gui_event_info()
@@ -33,6 +35,41 @@ struct gui_event_info
     int ydiff;
 };
 
+// TODO add as method to class
+void apply_sdl_event(SDL_Event & e, gui_event_info & gei, int swipe_threshold_low_x, int swipe_threshold_low_y)
+{
+    if (e.type == SDL_MOUSEBUTTONDOWN)
+    {
+        gei.mouse_event = true;
+        gei.pressed = true;
+        gei.event_x = e.button.x;
+        gei.event_y = e.button.y;
+        gei.valid_swipe = false;
+    }
+    else if (e.type == SDL_MOUSEBUTTONUP)
+    {
+        gei.mouse_event = true;
+        gei.pressed = false;
+        gei.down_x = gei.event_x;
+        gei.down_y = gei.event_y;
+        gei.event_x = e.button.x;
+        gei.event_y = e.button.y;
+
+        // FIXME use SDL timestamps? this may be 100ms off
+        gei.up_time_point = std::chrono::steady_clock::now();
+        gei.xdiff = gei.event_x - gei.down_x;
+        gei.ydiff = gei.event_y - gei.down_y;
+        gei.abs_xdiff = std::abs(gei.xdiff);
+        gei.abs_ydiff = std::abs(gei.ydiff);
+        gei.valid_swipe = gei.abs_xdiff > swipe_threshold_low_x || gei.abs_ydiff > swipe_threshold_low_y;
+        if (gei.valid_swipe)
+            gei.last_swipe_time_point = std::chrono::steady_clock::now();
+    }
+    else
+    {
+        gei.mouse_event = false;
+    }
+}
 
 struct gui_context
 {
@@ -317,5 +354,76 @@ struct h_layout : base_layout
 SDL_Rect pad_box(SDL_Rect box, int padding)
 {
     return { box.x + padding, box.y + padding, box.w - 2 * padding, box.h - 2 * padding };
+}
+
+unsigned int list_view_visible_items(SDL_Rect box, font_atlas & fa)
+{
+    return (box.h - 2) / fa.font_line_skip();
+}
+
+// for the moment only one highlight is supported, maybe more make sense later on
+int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned int & pos, int highlight, font_atlas & fa, gui_context & gc)
+{
+    unsigned int const visible_items = list_view_visible_items(box, fa);
+
+    int selection = -1;
+    gc.draw_entry_box(box);
+
+    SDL_Rect text_box { box.x + 1, box.y + 1, box.w - 2, static_cast<int>(fa.height()) };
+
+    gui_event_info const & gei = gc.gei;
+
+    bool const swipe = gei.valid_swipe && gei.mouse_event && within_rect(gei.down_x, gei.down_y, box) && !gei.pressed;
+    // hacky update before drawing...
+    if (swipe && gei.abs_ydiff * gc.dir_unambig_factor_threshold >= gei.abs_xdiff)
+    {
+        int const distance = static_cast<int>(visible_items) * 10 * gei.ydiff / (box.w / 2);
+        unsigned int const next_pos = pos + distance;
+        if (gei.ydiff < 0)
+            pos = dec_ensure_lower(next_pos, pos, 0);
+        else
+            pos = inc_ensure_upper(next_pos, pos, entries.size() < visible_items ? 0 : entries.size() - visible_items);
+    }
+
+    std::size_t n = pos;
+    while (n < entries.size() && text_box.y < box.y + box.h)
+    {
+        int const overlap = (text_box.y + text_box.h) - (box.y + box.h);
+        int const h = text_box.h - (overlap < 0 ? 0 : overlap + 1);
+
+        SDL_Rect src_rect { 0, 0, text_box.w, h };
+        SDL_Rect abs_rect {text_box.x, text_box.y, text_box.w, h};
+
+        // favor pressed over active
+        if (pressed_in(abs_rect, gei))
+            gc.draw_entry_pressed_background(abs_rect);
+        else if (highlight == static_cast<int>(n))
+            gc.draw_entry_active_background(abs_rect);
+
+        auto text_surf_ptr = fa.text(entries[n]);
+        SDL_SetSurfaceColorMod(text_surf_ptr.get(), 0, 0, 0);
+
+        SDL_Rect tmp_rect = text_box;
+        SDL_BlitSurface(text_surf_ptr.get(), &src_rect, gc.target_surface, &tmp_rect);
+
+        if (is_button_active(abs_rect, gei))
+            selection = n;
+
+        text_box.y += fa.font_line_skip();
+        n++;
+    }
+
+    // draw position indicator if it doesn't fit on one page
+    if (entries.size() > visible_items)
+    {
+        int const ind_len = std::max(15, static_cast<int>(((box.h - 2) * visible_items) / entries.size()));
+        int const ind_w = 7;
+
+        int const ind_y = box.y + 1 + ((box.h - 2 - ind_len) * pos) / (entries.size() - visible_items);
+        SDL_Rect ind_rect { box.x + box.w - ind_w - 1, ind_y, ind_w, ind_len};
+        gc.draw_entry_position_indicator(ind_rect);
+    }
+
+    return swipe ? -1 : selection;
 }
 

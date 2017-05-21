@@ -80,11 +80,6 @@ unsigned int const TOUCH_DISTANCE_THRESHOLD_HIGH = 10;
 std::array<char const * const, 3> const cover_extensions = { "png", "jpeg", "jpg" };
 std::array<char const * const, 3> const cover_names = { "front", "cover", "back" };
 
-void show_rect(SDL_Rect const & r)
-{
-    std::cout << r.x << " " << r.y << " on " << r.w << "x" << r.h << std::endl;
-}
-
 SDL_Surface * create_cover_replacement(SDL_Surface const * s, SDL_Rect brect, font_atlas & fa, std::string title, std::string artist, std::string album)
 {
     SDL_Surface * target_surface = create_similar_surface(s, brect.w, brect.h);
@@ -132,6 +127,33 @@ SDL_Surface * load_cover(std::string rel_song_dir_path)
     return nullptr;
 }
 
+enum class cover_type
+{
+    IMAGE,
+    SONG_INFO
+};
+
+std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string song_path, SDL_Surface const * s, font_atlas & fa, mpd_control & mpdc)
+{
+    SDL_Rect cover_rect { 0, 0, w, h};
+    SDL_Surface * cover_surface;
+    SDL_Surface * img_surface = load_cover(song_path);
+    if (img_surface != nullptr)
+    {
+        cover_surface = create_similar_surface(s, cover_rect.w, cover_rect.h);
+        blit_preserve_ar(img_surface, cover_surface, &cover_rect);
+        return std::make_pair(cover_type::IMAGE, unique_surface_ptr(cover_surface));
+    }
+    else
+    {
+        return std::make_pair(
+            cover_type::SONG_INFO, 
+            unique_surface_ptr(create_cover_replacement(s, cover_rect, fa, mpdc.get_current_title(), mpdc.get_current_artist(), mpdc.get_current_album()))
+        );
+    }
+}
+
+
 struct song
 {
     song(std::string t, std::string ar, std::string al, std::string p)
@@ -146,129 +168,6 @@ struct song
     std::string album;
     std::string path;
 };
-
-// ----------------------------------------------------------------------------
-// Drawing simple absolutely placed gui elements in an event loop.
-//
-
-// TODO add as method to class
-void apply_sdl_event(SDL_Event & e, gui_event_info & gei)
-{
-    if (e.type == SDL_MOUSEBUTTONDOWN)
-    {
-        gei.mouse_event = true;
-        gei.pressed = true;
-        gei.event_x = e.button.x;
-        gei.event_y = e.button.y;
-        gei.valid_swipe = false;
-    }
-    else if (e.type == SDL_MOUSEBUTTONUP)
-    {
-        gei.mouse_event = true;
-        gei.pressed = false;
-        gei.down_x = gei.event_x;
-        gei.down_y = gei.event_y;
-        gei.event_x = e.button.x;
-        gei.event_y = e.button.y;
-
-        // FIXME use SDL timestamps? this may be 100ms off
-        gei.up_time_point = std::chrono::steady_clock::now();
-        gei.xdiff = gei.event_x - gei.down_x;
-        gei.ydiff = gei.event_y - gei.down_y;
-        gei.abs_xdiff = std::abs(gei.xdiff);
-        gei.abs_ydiff = std::abs(gei.ydiff);
-        gei.valid_swipe = gei.abs_xdiff > SWIPE_THRESHOLD_LOW_X || gei.abs_ydiff > SWIPE_THRESHOLD_LOW_Y;
-        if (gei.valid_swipe)
-            gei.last_swipe_time_point = std::chrono::steady_clock::now();
-    }
-    else
-    {
-        gei.mouse_event = false;
-    }
-}
-
-// check overflow and ensure at most upper_bound
-unsigned int inc_ensure_upper(unsigned int new_pos, unsigned int old_pos, unsigned int upper_bound)
-{
-    return new_pos < old_pos ? upper_bound : std::min(new_pos, upper_bound);
-}
-
-// check underflow and ensure at least lower_bound
-unsigned int dec_ensure_lower(unsigned int new_pos, unsigned int old_pos, unsigned int lower_bound)
-{
-    return new_pos > old_pos ? lower_bound : std::max(new_pos, lower_bound);
-}
-
-unsigned int list_view_visible_items(SDL_Rect box, font_atlas & fa)
-{
-    return (box.h - 2) / fa.font_line_skip();
-}
-
-// for the moment only one highlight is supported, maybe more make sense later on
-int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned int & pos, int highlight, font_atlas & fa, gui_context & gc)
-{
-    unsigned int const visible_items = list_view_visible_items(box, fa);
-
-    int selection = -1;
-    gc.draw_entry_box(box);
-
-    SDL_Rect text_box { box.x + 1, box.y + 1, box.w - 2, static_cast<int>(fa.height()) };
-
-    gui_event_info const & gei = gc.gei;
-
-    bool const swipe = gei.valid_swipe && gei.mouse_event && within_rect(gei.down_x, gei.down_y, box) && !gei.pressed;
-    // hacky update before drawing...
-    if (swipe && gei.abs_ydiff * gc.dir_unambig_factor_threshold >= gei.abs_xdiff)
-    {
-        int const distance = static_cast<int>(visible_items) * 10 * gei.ydiff / (box.w / 2);
-        unsigned int const next_pos = pos + distance;
-        if (gei.ydiff < 0)
-            pos = dec_ensure_lower(next_pos, pos, 0);
-        else
-            pos = inc_ensure_upper(next_pos, pos, entries.size() < visible_items ? 0 : entries.size() - visible_items);
-    }
-
-    std::size_t n = pos;
-    while (n < entries.size() && text_box.y < box.y + box.h)
-    {
-        int const overlap = (text_box.y + text_box.h) - (box.y + box.h);
-        int const h = text_box.h - (overlap < 0 ? 0 : overlap + 1);
-
-        SDL_Rect src_rect { 0, 0, text_box.w, h };
-        SDL_Rect abs_rect {text_box.x, text_box.y, text_box.w, h};
-
-        // favor pressed over active
-        if (pressed_in(abs_rect, gei))
-            gc.draw_entry_pressed_background(abs_rect);
-        else if (highlight == static_cast<int>(n))
-            gc.draw_entry_active_background(abs_rect);
-
-        auto text_surf_ptr = fa.text(entries[n]);
-        SDL_SetSurfaceColorMod(text_surf_ptr.get(), 0, 0, 0);
-
-        SDL_Rect tmp_rect = text_box;
-        SDL_BlitSurface(text_surf_ptr.get(), &src_rect, gc.target_surface, &tmp_rect);
-
-        if (is_button_active(abs_rect, gei))
-            selection = n;
-
-        text_box.y += fa.font_line_skip();
-        n++;
-    }
-
-    // draw position indicator if it doesn't fit on one page
-    if (entries.size() > visible_items)
-    {
-        int const ind_len = std::max(15, static_cast<int>(((box.h - 2) * visible_items) / entries.size()));
-        int const ind_w = 7;
-
-        int const ind_y = box.y + 1 + ((box.h - 2 - ind_len) * pos) / (entries.size() - visible_items);
-        SDL_Rect ind_rect { box.x + box.w - ind_w - 1, ind_y, ind_w, ind_len};
-        gc.draw_entry_position_indicator(ind_rect);
-    }
-
-    return swipe ? -1 : selection;
-}
 
 void handle_action(swipe_action a, mpd_control & mpdc, unsigned int volume_step)
 {
@@ -498,8 +397,8 @@ int main(int argc, char * argv[])
     unsigned int search_items_view_pos = 0;
     std::vector<int> search_item_positions;
 
-    std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> cover_surface_ptr{nullptr, [](SDL_Surface * s) {SDL_FreeSurface(s);}};
-    bool has_cover = false;
+    unique_surface_ptr cover_surface_ptr;
+    cover_type cover_type;
 
     // TODO check for error?
     uint32_t const user_event_type = SDL_RegisterEvents(1);
@@ -566,7 +465,7 @@ int main(int argc, char * argv[])
                     {
                         case user_event::SONG_CHANGED:
                             // TODO do not reset
-                            // if (has_cover && same album)
+                            // if (cover_type == cover_type::IMAGE && same album)
                             cover_surface_ptr.reset();
                             break;
                         case user_event::PLAYLIST_CHANGED:
@@ -616,7 +515,7 @@ int main(int argc, char * argv[])
                     }
                 }
 #endif
-                apply_sdl_event(ev, gei);
+                apply_sdl_event(ev, gei, SWIPE_THRESHOLD_LOW_X, SWIPE_THRESHOLD_LOW_Y);
 
                 // global buttons
                 {
@@ -651,29 +550,7 @@ int main(int argc, char * argv[])
                     {
                         if (!cover_surface_ptr)
                         {
-                            SDL_Rect cover_rect { 0, 0, view_rect.w, view_rect.h};
-                            SDL_Surface * cover_surface;
-                            view_dirty = true;
-                            SDL_Surface * img_surface = load_cover(current_song_path);
-                            if (img_surface != nullptr)
-                            {
-                                has_cover = true;
-                                cover_surface = create_similar_surface(screen, cover_rect.w, cover_rect.h);
-                                blit_preserve_ar(img_surface, cover_surface, &cover_rect);
-                            }
-                            else
-                            {
-                                has_cover = false;
-                                cover_surface =
-                                    create_cover_replacement( screen
-                                                            , cover_rect
-                                                            , fa
-                                                            , mpdc.get_current_title()
-                                                            , mpdc.get_current_artist()
-                                                            , mpdc.get_current_album()
-                                                            );
-                            }
-                            cover_surface_ptr.reset(cover_surface);
+                            std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, screen, fa, mpdc);
                         }
                         SDL_Rect r = view_rect;
                         SDL_BlitSurface(cover_surface_ptr.get(), nullptr, screen, &r);
