@@ -153,21 +153,20 @@ std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string
     }
 }
 
-
-struct song
-{
-    song(std::string t, std::string ar, std::string al, std::string p)
-        : title(t)
-        , artist(ar)
-        , album(al)
-        , path(p)
-    {
-    }
-    std::string title;
-    std::string artist;
-    std::string album;
-    std::string path;
-};
+//struct song
+//{
+//    song(std::string t, std::string ar, std::string al, std::string p)
+//        : title(t)
+//        , artist(ar)
+//        , album(al)
+//        , path(p)
+//    {
+//    }
+//    std::string title;
+//    std::string artist;
+//    std::string album;
+//    std::string path;
+//};
 
 void handle_action(swipe_action a, mpd_control & mpdc, unsigned int volume_step)
 {
@@ -196,7 +195,7 @@ void handle_action(swipe_action a, mpd_control & mpdc, unsigned int volume_step)
 enum class view_type
 {
     COVER_SWIPE,
-    PLAYLIST,
+    QUEUE,
     SONG_SEARCH,
     SHUTDOWN
 };
@@ -401,6 +400,10 @@ int main(int argc, char * argv[])
         bool random;
         view_type current_view = view_type::COVER_SWIPE;
         bool view_dirty = false;
+
+        unique_surface_ptr cover_surface_ptr;
+        cover_type cover_type;
+
         unsigned int current_song_pos = 0;
         unsigned int cpl_view_pos = 0;
         std::vector<std::string> cpl;
@@ -412,9 +415,6 @@ int main(int argc, char * argv[])
         std::vector<std::string> search_items;
         unsigned int search_items_view_pos = 0;
         std::vector<int> search_item_positions;
-
-        unique_surface_ptr cover_surface_ptr;
-        cover_type cover_type;
 
         // TODO check for error?
         uint32_t const user_event_type = SDL_RegisterEvents(1);
@@ -592,7 +592,7 @@ int main(int argc, char * argv[])
 
                         unsigned int const item_skip = list_view_visible_items(top_box, fa_small);
 
-                        if (current_view == view_type::PLAYLIST)
+                        if (current_view == view_type::QUEUE)
                         {
 
                             h_layout hl(3, 4, vl.box());
