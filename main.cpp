@@ -150,6 +150,7 @@ std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string
     {
         cover_surface = create_similar_surface(s, cover_rect.w, cover_rect.h);
         blit_preserve_ar(img_surface, cover_surface, &cover_rect);
+        SDL_FreeSurface(img_surface);
         return std::make_pair(cover_type::IMAGE, unique_surface_ptr(cover_surface));
     }
     else
