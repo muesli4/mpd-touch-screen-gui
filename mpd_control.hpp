@@ -19,9 +19,18 @@ struct playlist_change_info
     unsigned int new_length;
 };
 
+struct song_change_info
+{
+    song_change_info();
+    song_change_info(std::string path, unsigned int pos);
+    bool valid;
+    std::string path;
+    unsigned int pos;
+};
+
 struct mpd_control
 {
-    mpd_control(std::function<void(std::string, unsigned int)> new_song_cb, std::function<void(bool)> random_cb, std::function<void()> playlist_changed_cb);
+    mpd_control(std::function<void(song_change_info)> new_song_cb, std::function<void(bool)> random_cb, std::function<void()> playlist_changed_cb);
     ~mpd_control();
 
     void run();
@@ -70,7 +79,7 @@ struct mpd_control
 
     bool _run;
 
-    std::function<void(std::string, unsigned int)> _new_song_cb;
+    std::function<void(song_change_info)> _new_song_cb;
     std::function<void(bool)> _random_cb;
     std::function<void()> _playlist_changed_cb;
 

@@ -28,6 +28,7 @@
 #include "gui.hpp"
 
 // future feature list and ideas:
+// TODO replace cycling with a menu
 // TODO when hardware rendering is available replace blits with texture copy of the renderer
 //      for software it doesn't make sense, since the renderer will just make a
 //      copy of the surface to generate a pseudo-texture
@@ -175,7 +176,7 @@ std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string
 //    std::string path;
 //};
 
-void handle_action(swipe_action a, mpd_control & mpdc, unsigned int volume_step)
+void handle_cover_swipe_action(swipe_action a, mpd_control & mpdc, unsigned int volume_step)
 {
     switch (a)
     {
@@ -212,17 +213,6 @@ view_type cycle_view_type(view_type v)
     return static_cast<view_type>((static_cast<unsigned int>(v) + 1) % 4);
 }
 
-enum class user_event
-{
-    RANDOM_CHANGED,
-    SONG_CHANGED,
-    PLAYLIST_CHANGED,
-#ifdef DIM_IDLE_TIMER
-    TIMER_EXPIRED,
-#endif
-    REFRESH
-};
-
 enum quit_action
 {
     SHUTDOWN,
@@ -246,6 +236,17 @@ quit_action shutdown_view(SDL_Rect box, font_atlas & fa, gui_context & gc)
     return quit_action::NONE;
 }
 
+enum class user_event
+{
+    RANDOM_CHANGED,
+    SONG_CHANGED,
+    PLAYLIST_CHANGED,
+#ifdef DIM_IDLE_TIMER
+    TIMER_EXPIRED,
+#endif
+    REFRESH
+};
+
 void push_user_event(uint32_t event_type, user_event ue)
 {
     SDL_Event e;
@@ -265,7 +266,6 @@ template <typename T> void push_change_event(uint32_t event_type, user_event ue,
 }
 
 #ifdef DIM_IDLE_TIMER
-//
 struct idle_timer_info
 {
     idle_timer_info(uint32_t uet) : user_event_type(uet) {}
@@ -343,9 +343,6 @@ int main(int argc, char * argv[])
 
     quit_action quit_action = quit_action::NONE;
 
-    // allows swipes with multiple lines, as long as the time between them is below this TODO not implemented
-    //unsigned int const TOUCH_DEBOUNCE_TIME_MS_THRESHOLD_MAX = 200;
-
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS
 #ifdef DIM_IDLE_TIMER
                             | SDL_INIT_TIMER
@@ -366,19 +363,6 @@ int main(int argc, char * argv[])
     if (TTF_Init() == -1)
     {
         std::cerr << "Could not initialize font rendering:"
-                  << TTF_GetError() << '.' << std::endl;
-        std::exit(0);
-    }
-    else
-    {
-        std::atexit(TTF_Quit);
-    }
-
-    TTF_Font * font = TTF_OpenFont(DEFAULT_FONT_PATH, 20);
-
-    if (font == 0)
-    {
-        std::cerr << "Could not load font:"
                   << TTF_GetError() << '.' << std::endl;
         std::exit(0);
     }
@@ -404,6 +388,8 @@ int main(int argc, char * argv[])
     {
         // loop state
         std::string current_song_path;
+        bool current_song_exists;
+
         bool random;
         view_type current_view = view_type::COVER_SWIPE;
         bool view_dirty = false;
@@ -433,11 +419,15 @@ int main(int argc, char * argv[])
 #endif
 
         mpd_control mpdc(
-            [&](std::string const & uri, unsigned int pos)
+            [&](song_change_info sci)
             {
+                current_song_exists = sci.valid;
+                if (sci.valid)
+                {
+                    current_song_path = sci.path;
+                    current_song_pos = sci.pos;
+                }
                 push_user_event(user_event_type, user_event::SONG_CHANGED);
-                current_song_path = uri;
-                current_song_pos = pos;
             },
             [&](bool value)
             {
@@ -568,14 +558,21 @@ int main(int argc, char * argv[])
                     // redraw cover if it is a new one or if marked dirty
                     if (view_dirty || !cover_surface_ptr)
                     {
-                        if (!cover_surface_ptr)
-                            std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, screen, fa, mpdc);
-                        SDL_Rect r = view_rect;
-                        SDL_BlitSurface(cover_surface_ptr.get(), nullptr, screen, &r);
+                        if (current_song_exists)
+                        {
+                            if (!cover_surface_ptr)
+                                std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, screen, fa, mpdc);
+                            SDL_Rect r = view_rect;
+                            SDL_BlitSurface(cover_surface_ptr.get(), nullptr, screen, &r);
+                            view_dirty = false;
+                        }
+                        else
+                        {
+                            SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 0, 0, 0));
+                        }
                         SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
-                        view_dirty = false;
                     }
-                    handle_action(a, mpdc, 5);
+                    handle_cover_swipe_action(a, mpdc, 5);
                 }
                 else
                 {
@@ -601,7 +598,7 @@ int main(int argc, char * argv[])
                             h_layout hl(3, 4, vl.box());
 
                             if (text_button(hl.box(), "Jump", fa, gc))
-                                cpl_view_pos = current_song_pos >= 5 ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - item_skip)) : 0;
+                                cpl_view_pos = current_song_pos >= 5 && current_song_exists ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - item_skip)) : 0;
                             hl.next();
                             if (text_button(hl.box(), "▲", fa, gc))
                                 cpl_view_pos = dec_ensure_lower(cpl_view_pos - item_skip, cpl_view_pos, 0);
@@ -609,7 +606,7 @@ int main(int argc, char * argv[])
                             if (text_button(hl.box(), "▼", fa, gc))
                                 cpl_view_pos = inc_ensure_upper(cpl_view_pos + item_skip, cpl_view_pos, cpl.size() < item_skip ? 0 : cpl.size() - item_skip);
 
-                            int selection = list_view(top_box, cpl, cpl_view_pos, current_song_pos, fa_small, gc);
+                            int selection = list_view(top_box, cpl, cpl_view_pos, current_song_exists ? current_song_pos : -1, fa_small, gc);
                             if (selection != -1)
                                 mpdc.play_position(selection);
                         }
@@ -728,7 +725,6 @@ int main(int argc, char * argv[])
         mpdc_thread.join();
     }
 
-    TTF_CloseFont(font);
     TTF_Quit();
 
     SDL_DestroyWindow(window);

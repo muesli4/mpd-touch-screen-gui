@@ -13,7 +13,19 @@ playlist_change_info::playlist_change_info(int nv, playlist_change_info::diff_ty
 {
 }
 
-mpd_control::mpd_control(std::function<void(std::string, unsigned int)> new_song_cb, std::function<void(bool)> random_cb, std::function<void()> playlist_changed_cb)
+song_change_info::song_change_info()
+    : valid(false)
+{
+}
+
+song_change_info::song_change_info(std::string path, unsigned int pos)
+    : valid(true)
+    , path(path)
+    , pos(pos)
+{
+}
+
+mpd_control::mpd_control(std::function<void(song_change_info)> new_song_cb, std::function<void(bool)> random_cb, std::function<void()> playlist_changed_cb)
     : _c(mpd_connection_new(nullptr, 0, 0))
     , _run(true)
     , _new_song_cb(new_song_cb)
@@ -36,7 +48,7 @@ void mpd_control::run()
 {
     mpd_song * last_song = mpd_run_current_song(_c);
 
-    if (last_song != 0) new_song_cb(last_song);
+    new_song_cb(last_song);
 
     while (_run)
     {
@@ -50,16 +62,16 @@ void mpd_control::run()
         {
             mpd_song * song = mpd_run_current_song(_c);
 
-            if (song != 0)
+            if (last_song != nullptr)
             {
-                if (last_song != 0)
-                {
-                    if (mpd_song_get_id(song) != mpd_song_get_id(last_song))
-                    {
-                        new_song_cb(song);
-                    }
-                    mpd_song_free(last_song);
-                }
+                if (song == nullptr || (song != nullptr && mpd_song_get_id(last_song) != mpd_song_get_id(song)))
+                    new_song_cb(song);
+                mpd_song_free(last_song);
+            }
+            else
+            {
+                if (song != nullptr)
+                    new_song_cb(song);
             }
             last_song = song;
         }
@@ -88,7 +100,8 @@ void mpd_control::run()
             }
         }
     }
-    mpd_song_free(last_song);
+    if (last_song != nullptr)
+        mpd_song_free(last_song);
 }
 
 void mpd_control::stop()
@@ -239,8 +252,16 @@ std::string mpd_control::get_current_tag(enum mpd_tag_type type)
         scoped_lock lock(_external_song_queries_mutex);
         _external_song_queries.push_back([type, promise_ptr](mpd_connection * c, mpd_song * s)
         {
-            char const * const cstr = mpd_song_get_tag(s, type, 0);
-            promise_ptr->set_value(string_from_ptr(cstr));
+            if (s != nullptr)
+            {
+                char const * const cstr = mpd_song_get_tag(s, type, 0);
+                promise_ptr->set_value(string_from_ptr(cstr));
+            }
+            else
+            {
+                promise_ptr->set_value("");
+            }
+
         }
         );
     }
@@ -256,5 +277,5 @@ void mpd_control::add_external_task(std::function<void(mpd_connection *)> t)
 
 void mpd_control::new_song_cb(mpd_song * s)
 {
-    _new_song_cb(mpd_song_get_uri(s), mpd_song_get_pos(s));
+    _new_song_cb(s != nullptr ? song_change_info(mpd_song_get_uri(s), mpd_song_get_pos(s)) : song_change_info());
 }
