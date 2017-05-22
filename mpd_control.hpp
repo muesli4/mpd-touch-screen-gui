@@ -8,6 +8,8 @@
 
 #include <mpd/client.h>
 
+#define USE_POLL
+
 struct playlist_change_info
 {
     typedef std::vector<std::pair<unsigned int, std::string>> diff_type;
@@ -88,6 +90,10 @@ struct mpd_control
 
     std::mutex _external_song_queries_mutex;
     std::deque<std::function<void(mpd_connection *, mpd_song *)>> _external_song_queries;
+
+#ifdef USE_POLL
+    int _eventfd;
+#endif
 };
 
 #endif
