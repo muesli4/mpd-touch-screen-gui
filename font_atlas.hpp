@@ -24,6 +24,8 @@ struct font_atlas
 
     int font_line_skip();
 
+    void clear();
+
     private:
 
     int get_word_left_kerning(std::string const & word);

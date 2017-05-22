@@ -1,5 +1,4 @@
 #include <vector>
-#include <iostream>
 #include <algorithm>
 
 #include "font_atlas.hpp"
@@ -27,8 +26,7 @@ font_atlas::~font_atlas()
 {
     TTF_CloseFont(_font);
 
-    for (auto p : _prerendered)
-        SDL_FreeSurface(p.second);
+    clear();
 }
 
 // http://stackoverflow.com/questions/18534494/convert-from-utf-8-to-unicode-c
@@ -211,7 +209,8 @@ std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> font_atlas::text(std::strin
 SDL_Surface * font_atlas::word(std::string w)
 {
     // FIXME: temporary solution - do not use too much memory, although with words caching it's not as bad as before
-    if (_prerendered.size() > 40000) _prerendered.clear();
+    if (_prerendered.size() > 40000)
+        clear();
 
     auto it = _prerendered.find(w);
     if (it == _prerendered.end())
@@ -232,4 +231,11 @@ unsigned int font_atlas::height()
 int font_atlas::font_line_skip()
 {
     return TTF_FontLineSkip(_font);
+}
+
+void font_atlas::clear()
+{
+    for (auto p : _prerendered)
+        SDL_FreeSurface(p.second);
+    _prerendered.clear();
 }
