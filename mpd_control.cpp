@@ -2,7 +2,6 @@
 #include <thread>
 #include <memory>
 #include <cstring>
-#include <iostream>
 
 #include "mpd_control.hpp"
 #include "util.hpp"
@@ -85,7 +84,6 @@ void mpd_control::run()
             {
                 uint64_t dummy;
                 eventfd_read(_eventfd, &dummy);
-                eventfd_write(_eventfd, 0);
             }
         }
 #endif
@@ -245,7 +243,6 @@ std::pair<std::vector<std::string>, unsigned int> mpd_control::get_current_playl
         mpd_song * song;
         while ((song = mpd_recv_song(c)) != nullptr)
         {
-
             playlist.push_back(format_playlist_song(song));
             mpd_song_free(song);
         }
