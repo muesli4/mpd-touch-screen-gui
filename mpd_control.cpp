@@ -66,9 +66,10 @@ void mpd_control::run()
     {
         mpd_send_idle_mask(_c, static_cast<mpd_idle>(MPD_IDLE_PLAYER | MPD_IDLE_OPTIONS));
 
-
 #ifdef USE_POLL
         {
+            // wake up if the thread signals it or the mpd server sends a
+            // response
             struct pollfd pollfds[] =
                 { { _eventfd, POLLIN, 0}
                 , { mpd_connection_get_fd(_c), POLLIN, 0}

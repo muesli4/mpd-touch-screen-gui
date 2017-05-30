@@ -92,6 +92,7 @@ struct mpd_control
     std::deque<std::function<void(mpd_connection *, mpd_song *)>> _external_song_queries;
 
 #ifdef USE_POLL
+    // a file descriptor for thread communication
     int _eventfd;
 #endif
 };
