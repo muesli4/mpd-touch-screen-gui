@@ -422,6 +422,9 @@ int main(int argc, char * argv[])
         mpd_control mpdc(
             [&](song_change_info sci)
             {
+                // TODO probably move, as string copy might not be atomic
+                //      another idea is to completely move all song information
+                //      into the main thread
                 current_song_exists = sci.valid;
                 if (sci.valid)
                 {
@@ -467,7 +470,7 @@ int main(int argc, char * argv[])
 #endif
                     )
             {
-
+                // handle asynchronous user events synchronously
                 if (ev.type == user_event_type)
                 {
                     switch (static_cast<user_event>(ev.user.code))
@@ -483,7 +486,10 @@ int main(int argc, char * argv[])
                                 current_playlist_needs_refresh = true;
                             else
 #endif
+                            {
                                 refresh_current_playlist(cpl, cpv, mpdc);
+                                present_search_results = false;
+                            }
                             break;
 #ifdef DIM_IDLE_TIMER
                         case user_event::TIMER_EXPIRED:
@@ -509,6 +515,7 @@ int main(int argc, char * argv[])
                         if (current_playlist_needs_refresh)
                         {
                             refresh_current_playlist(cpl, cpv, mpdc);
+                            present_search_results = false;
                             current_playlist_needs_refresh = false;
                         }
                         // ignore one event, turn on lights
