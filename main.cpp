@@ -445,7 +445,9 @@ int main(int argc, char * argv[])
 
         std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
 
+        // get initial state from mpd
         std::tie(cpl, cpv) = mpdc.get_current_playlist();
+        random = mpdc.get_random();
 
         font_atlas fa(DEFAULT_FONT_PATH, 20);
         font_atlas fa_small(DEFAULT_FONT_PATH, 15);
