@@ -16,6 +16,14 @@ You will have to change the cover path constants. Most of the other parts are sy
 * In the search view a on-screen keyboard is presented that allows to search for songs case-insensitive. The results may be browsed and played in the same manner as with the playlist view.
 * A final view allows shutting down and rebooting the machine.
 
+## Example images
+
+![cover swipe](/example-images/cover-swipe.png)
+![playlist](/example-images/playlist.png)
+![search input](/example-images/search-input.png)
+![search result](/example-images/search-result.png)
+![shutdown](/example-images/shutdown.png)
+
 # Requirements
 
 * SDL2_ttf
