@@ -19,6 +19,7 @@ You will have to change the cover path constants. Most of the other parts are sy
 ## Example images
 
 ![cover swipe](/example-images/cover-swipe.png)
+![cover swipe text](/example-images/cover-swipe-text.png)
 ![playlist](/example-images/playlist.png)
 ![search input](/example-images/search-input.png)
 ![search result](/example-images/search-result.png)
