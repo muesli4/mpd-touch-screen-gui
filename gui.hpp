@@ -111,7 +111,7 @@ struct gui_context
 {
     gui_context(
         gui_event_info const & gei,
-        SDL_Surface * s,
+        SDL_Window * w,
         double dir_unambig_factor_threshold,
         unsigned int touch_distance_threshold_high,
         std::chrono::milliseconds swipe_wait_debounce_threshold
@@ -129,13 +129,16 @@ struct gui_context
         , entry_selected_bg_color{250, 200, 200}
         , bg_color{0, 0, 0} //250, 250, 250}
         , active_color{230, 230, 255}
-
     {
-        renderer = SDL_CreateSoftwareRenderer(s);
+        // FIXME none of those work, why?
+        //renderer = SDL_GetRenderer(w);
+        //renderer = SDL_CreateRenderer(w, -1, 0);
+        renderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(w));
     }
 
     ~gui_context()
     {
+        // TODO safe?
         SDL_DestroyRenderer(renderer);
     }
 

@@ -353,12 +353,17 @@ int main(int argc, char * argv[])
 
     // determine screen size of display 0
     SDL_DisplayMode mode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
+#ifndef TEST_BUILD
     if (SDL_GetDisplayMode(0, 0, &mode) != 0)
     {
         std::cerr << "Could not determine screen size:"
                   << SDL_GetError() << '.' << std::endl;
         std::exit(0);
     }
+#else
+    mode.w = 320;
+    mode.h = 240;
+#endif
 
     // font rendering setup
     if (TTF_Init() == -1)
@@ -373,13 +378,11 @@ int main(int argc, char * argv[])
         ( "mpc-touch-lcd-gui"
         , SDL_WINDOWPOS_UNDEFINED
         , SDL_WINDOWPOS_UNDEFINED
-#ifdef TEST_BUILD
-        , 320
-        , 240
-        , 0
-#else
         , mode.w
         , mode.h
+#ifdef TEST_BUILD
+        , 0
+#else
         , SDL_WINDOW_FULLSCREEN
 #endif
         );
@@ -452,7 +455,7 @@ int main(int argc, char * argv[])
         font_atlas fa(DEFAULT_FONT_PATH, 20);
         font_atlas fa_small(DEFAULT_FONT_PATH, 15);
         gui_event_info gei;
-        gui_context gc(gei, screen, DIR_UNAMBIG_FACTOR_THRESHOLD, TOUCH_DISTANCE_THRESHOLD_HIGH, SWIPE_WAIT_DEBOUNCE_THRESHOLD);
+        gui_context gc(gei, window, DIR_UNAMBIG_FACTOR_THRESHOLD, TOUCH_DISTANCE_THRESHOLD_HIGH, SWIPE_WAIT_DEBOUNCE_THRESHOLD);
 
         bool run = true;
         SDL_Event ev;
@@ -721,9 +724,10 @@ int main(int argc, char * argv[])
                             }
                         }
                     }
-                    gc.render();
-                    SDL_UpdateWindowSurface(window);
                 }
+                gc.render();
+                // necessary with software rendering
+                SDL_UpdateWindowSurface(window);
             }
         }
 
