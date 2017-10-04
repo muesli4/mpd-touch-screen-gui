@@ -11,8 +11,7 @@ bool is_input_event(SDL_Event & ev)
     return ev.type == SDL_MOUSEBUTTONDOWN ||
            ev.type == SDL_MOUSEBUTTONUP ||
            ev.type == SDL_FINGERDOWN ||
-           ev.type == SDL_FINGERUP ||
-           ev.type == SDL_FINGERMOTION;
+           ev.type == SDL_FINGERUP;
 }
 
 struct gui_event_info
@@ -100,10 +99,6 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_thr
         gei.valid_swipe = gei.abs_xdiff > swipe_threshold_low_x || gei.abs_ydiff > swipe_threshold_low_y;
         if (gei.valid_swipe)
             gei.last_swipe_time_point = std::chrono::steady_clock::now();
-    }
-    else if (e.type == SDL_FINGERMOTION)
-    {
-        std::cout << "unimplemented finger motion: " << e.tfinger.x << " " << e.tfinger.y << std::endl;
     }
     else
     {
