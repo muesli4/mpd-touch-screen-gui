@@ -6,7 +6,7 @@
 
 #include "util.hpp"
 
-bool is_user_input_event(SDL_Event & ev)
+bool is_input_event(SDL_Event & ev)
 {
     return ev.type == SDL_MOUSEBUTTONDOWN ||
            ev.type == SDL_MOUSEBUTTONUP ||
@@ -76,19 +76,14 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_thr
     }
     else if (e.type == SDL_FINGERDOWN)
     {
-        std::cout << e.tfinger.x << " " << e.tfinger.y << std::endl;
-        /*
         gei.mouse_event = true;
         gei.pressed = true;
         gei.event_x = e.tfinger.x;
         gei.event_y = e.tfinger.y;
         gei.valid_swipe = false;
-        */
     }
     else if (e.type == SDL_FINGERUP)
     {
-        std::cout << e.tfinger.x << " " << e.tfinger.y << std::endl;
-        /*
         gei.mouse_event = true;
         gei.pressed = false;
         gei.down_x = gei.event_x;
@@ -105,11 +100,10 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_thr
         gei.valid_swipe = gei.abs_xdiff > swipe_threshold_low_x || gei.abs_ydiff > swipe_threshold_low_y;
         if (gei.valid_swipe)
             gei.last_swipe_time_point = std::chrono::steady_clock::now();
-        */
     }
     else if (e.type == SDL_FINGERMOTION)
     {
-        std::cout << e.tfinger.x << " " << e.tfinger.y << std::endl;
+        std::cout << "unimplemented finger motion: " << e.tfinger.x << " " << e.tfinger.y << std::endl;
     }
     else
     {

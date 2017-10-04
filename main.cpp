@@ -465,9 +465,9 @@ int main(int argc, char * argv[])
                 run = false;
             }
             // most of the events are not required for a standalone fullscreen application
-            else if (is_user_input_event(ev) || ev.type == user_event_type
+            else if (is_input_event(ev) || ev.type == user_event_type
 #ifdef TEST_BUILD
-                                             || ev.type == SDL_WINDOWEVENT
+                                        || ev.type == SDL_WINDOWEVENT
 #endif
                     )
             {
