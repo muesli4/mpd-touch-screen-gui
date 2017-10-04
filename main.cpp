@@ -49,7 +49,7 @@
 #endif
 
 // enable dimming functionality
-#define DIM_IDLE_TIMER
+//#define DIM_IDLE_TIMER
 
 #ifdef TEST_BUILD
 char const * const BASE_DIR = "/home/moritz/Musik/";
@@ -465,10 +465,9 @@ int main(int argc, char * argv[])
                 run = false;
             }
             // most of the events are not required for a standalone fullscreen application
-            else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP
-                                                    || ev.type == user_event_type
+            else if (is_user_input_event(ev) || ev.type == user_event_type
 #ifdef TEST_BUILD
-                                                    || ev.type == SDL_WINDOWEVENT
+                                             || ev.type == SDL_WINDOWEVENT
 #endif
                     )
             {

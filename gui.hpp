@@ -6,6 +6,15 @@
 
 #include "util.hpp"
 
+bool is_user_input_event(SDL_Event & ev)
+{
+    return ev.type == SDL_MOUSEBUTTONDOWN ||
+           ev.type == SDL_MOUSEBUTTONUP ||
+           ev.type == SDL_FINGERDOWN ||
+           ev.type == SDL_FINGERUP ||
+           ev.type == SDL_FINGERMOTION;
+}
+
 struct gui_event_info
 {
     gui_event_info()
@@ -64,6 +73,43 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_thr
         gei.valid_swipe = gei.abs_xdiff > swipe_threshold_low_x || gei.abs_ydiff > swipe_threshold_low_y;
         if (gei.valid_swipe)
             gei.last_swipe_time_point = std::chrono::steady_clock::now();
+    }
+    else if (e.type == SDL_FINGERDOWN)
+    {
+        std::cout << e.tfinger.x << " " << e.tfinger.y << std::endl;
+        /*
+        gei.mouse_event = true;
+        gei.pressed = true;
+        gei.event_x = e.tfinger.x;
+        gei.event_y = e.tfinger.y;
+        gei.valid_swipe = false;
+        */
+    }
+    else if (e.type == SDL_FINGERUP)
+    {
+        std::cout << e.tfinger.x << " " << e.tfinger.y << std::endl;
+        /*
+        gei.mouse_event = true;
+        gei.pressed = false;
+        gei.down_x = gei.event_x;
+        gei.down_y = gei.event_y;
+        gei.event_x = e.tfinger.x;
+        gei.event_y = e.tfinger.y;
+
+        // FIXME use SDL timestamps? this may be 100ms off
+        gei.up_time_point = std::chrono::steady_clock::now();
+        gei.xdiff = gei.event_x - gei.down_x;
+        gei.ydiff = gei.event_y - gei.down_y;
+        gei.abs_xdiff = std::abs(gei.xdiff);
+        gei.abs_ydiff = std::abs(gei.ydiff);
+        gei.valid_swipe = gei.abs_xdiff > swipe_threshold_low_x || gei.abs_ydiff > swipe_threshold_low_y;
+        if (gei.valid_swipe)
+            gei.last_swipe_time_point = std::chrono::steady_clock::now();
+        */
+    }
+    else if (e.type == SDL_FINGERMOTION)
+    {
+        std::cout << e.tfinger.x << " " << e.tfinger.y << std::endl;
     }
     else
     {
