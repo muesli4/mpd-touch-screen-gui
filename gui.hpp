@@ -81,6 +81,7 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_thr
         gei.event_y = e.tfinger.y;
         gei.valid_swipe = false;
     }
+    // TODO normalization might not longer be necessary
     else if (e.type == SDL_FINGERUP)
     {
         gei.mouse_event = true;
