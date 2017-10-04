@@ -88,9 +88,9 @@ unsigned int const TOUCH_DISTANCE_THRESHOLD_HIGH = 10;
 std::array<char const * const, 3> const cover_extensions = { "png", "jpeg", "jpg" };
 std::array<char const * const, 3> const cover_names = { "front", "cover", "back" };
 
-SDL_Surface * create_cover_replacement(SDL_Surface const * s, SDL_Rect brect, font_atlas & fa, std::string title, std::string artist, std::string album)
+SDL_Surface * create_cover_replacement(SDL_PixelFormat const * fmt, SDL_Rect brect, font_atlas & fa, std::string title, std::string artist, std::string album)
 {
-    SDL_Surface * target_surface = create_similar_surface(s, brect.w, brect.h);
+    SDL_Surface * target_surface = create_surface(fmt, brect.w, brect.h);
 
     SDL_FillRect(target_surface, nullptr, SDL_MapRGB(target_surface->format, 0, 0, 0));
 
@@ -141,14 +141,14 @@ enum class cover_type
     SONG_INFO
 };
 
-std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string song_path, SDL_Surface const * s, font_atlas & fa, mpd_control & mpdc)
+std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string song_path, SDL_PixelFormat const * fmt, font_atlas & fa, mpd_control & mpdc)
 {
     SDL_Rect cover_rect { 0, 0, w, h};
     SDL_Surface * cover_surface;
     SDL_Surface * img_surface = load_cover(song_path);
     if (img_surface != nullptr)
     {
-        cover_surface = create_similar_surface(s, cover_rect.w, cover_rect.h);
+        cover_surface = create_surface(fmt, cover_rect.w, cover_rect.h);
         blit_preserve_ar(img_surface, cover_surface, &cover_rect);
         SDL_FreeSurface(img_surface);
         return std::make_pair(cover_type::IMAGE, unique_surface_ptr(cover_surface));
@@ -157,7 +157,7 @@ std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string
     {
         return std::make_pair(
             cover_type::SONG_INFO, 
-            unique_surface_ptr(create_cover_replacement(s, cover_rect, fa, mpdc.get_current_title(), mpdc.get_current_artist(), mpdc.get_current_album()))
+            unique_surface_ptr(create_cover_replacement(fmt, cover_rect, fa, mpdc.get_current_title(), mpdc.get_current_artist(), mpdc.get_current_album()))
         );
     }
 }
@@ -538,7 +538,7 @@ int main(int argc, char * argv[])
 
                 // global buttons
                 {
-                    SDL_Rect buttons_rect {0, 0, 40, screen->h};
+                    SDL_Rect buttons_rect {0, 0, 40, mode.h};
                     gc.draw_background(buttons_rect);
                     v_layout l(6, 4, pad_box(buttons_rect, 4));
 
@@ -554,10 +554,9 @@ int main(int argc, char * argv[])
                     if (text_button(l.box(), random ? "¬R" : "R", fa, gc))
                         mpdc.set_random(!random);
 
-                    SDL_UpdateWindowSurfaceRects(window, &buttons_rect, 1);
                 }
 
-                SDL_Rect const view_rect = {40, 0, screen->w - 40, screen->h};
+                SDL_Rect const view_rect = {40, 0, mode.w - 40, mode.h};
 
                 // view area
                 if (current_view == view_type::COVER_SWIPE)
@@ -570,16 +569,13 @@ int main(int argc, char * argv[])
                         if (current_song_exists)
                         {
                             if (!cover_surface_ptr)
-                                std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, screen, fa, mpdc);
+                                std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, screen->format, fa, mpdc);
                             SDL_Rect r = view_rect;
                             gc.blit(cover_surface_ptr.get(), nullptr, &r);
                             view_dirty = false;
                         }
                         else
-                        {
-                            SDL_FillRect(screen, &view_rect, SDL_MapRGB(screen->format, 0, 0, 0));
-                        }
-                        SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
+                            gc.draw_background(view_rect);
                     }
                     handle_cover_swipe_action(a, mpdc, 5);
                 }
@@ -725,7 +721,8 @@ int main(int argc, char * argv[])
                             }
                         }
                     }
-                    SDL_UpdateWindowSurfaceRects(window, &view_rect, 1);
+                    gc.render();
+                    SDL_UpdateWindowSurface(window);
                 }
             }
         }

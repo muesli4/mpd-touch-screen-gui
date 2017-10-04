@@ -172,7 +172,7 @@ std::unique_ptr<SDL_Surface, void(*)(SDL_Surface *)> font_atlas::text(std::strin
             int const target_height = font_line_skip() * static_cast<int>(widths.size());
 
             // TODO move and use create_similar_surface
-            result = create_similar_surface(surfaces[0], target_width, target_height);
+            result = create_surface(surfaces[0]->format, target_width, target_height);
 
             int x = 0;
             int y = 0;
