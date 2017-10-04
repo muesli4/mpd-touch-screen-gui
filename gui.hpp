@@ -117,7 +117,6 @@ struct gui_context
         std::chrono::milliseconds swipe_wait_debounce_threshold
     )
         : gei(gei)
-        , target_surface(s)
         , dir_unambig_factor_threshold(dir_unambig_factor_threshold)
         , touch_distance_threshold_high(touch_distance_threshold_high)
         , swipe_wait_debounce_threshold(swipe_wait_debounce_threshold)
@@ -145,6 +144,14 @@ struct gui_context
         SDL_RenderPresent(renderer);
     }
 
+    void blit(SDL_Surface * s, const SDL_Rect * srcrect, const SDL_Rect * dstrect)
+    {
+        // TODO inefficient
+        SDL_Texture * tex = SDL_CreateTextureFromSurface(renderer, s);
+        SDL_RenderCopyEx(renderer, tex, srcrect, dstrect, 0, nullptr, SDL_FLIP_NONE);
+        SDL_DestroyTexture(tex);
+    }
+
     void draw_button_box(SDL_Rect box, bool activated)
     {
         set_color(activated ? button_selected_bg_color : button_bg_color);
@@ -159,7 +166,8 @@ struct gui_context
         SDL_SetSurfaceColorMod(text_surf_ptr.get(), button_fg_color.r, button_fg_color.g, button_fg_color.b);
         // center text in box
         SDL_Rect target_rect = {box.x + (box.w - text_surf_ptr->w) / 2, box.y + (box.h - text_surf_ptr->h) / 2, text_surf_ptr->w, text_surf_ptr->h};
-        SDL_BlitSurface(text_surf_ptr.get(), nullptr, target_surface, &target_rect);
+
+        blit(text_surf_ptr.get(), nullptr, &target_rect);
     }
 
     void draw_entry_box(SDL_Rect box)
@@ -198,7 +206,6 @@ struct gui_context
     }
 
     gui_event_info const & gei;
-    SDL_Surface * target_surface;
     SDL_Renderer * renderer;
     double dir_unambig_factor_threshold;
     unsigned int touch_distance_threshold_high;
@@ -264,7 +271,7 @@ bool image_button( SDL_Rect box
                  , gui_context & gc
                  )
 {
-    SDL_BlitSurface(pressed_in(box, gc.gei) ? pressed_surf : idle_surf, nullptr, gc.target_surface, &box);
+    gc.blit(pressed_in(box, gc.gei) ? pressed_surf : idle_surf, nullptr, &box);
     return is_button_active(box, gc.gei);
 }
 
@@ -427,7 +434,6 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
         int const overlap = (text_box.y + text_box.h) - (box.y + box.h);
         int const h = text_box.h - (overlap < 0 ? 0 : overlap + 1);
 
-        SDL_Rect src_rect { 0, 0, text_box.w, h };
         SDL_Rect abs_rect {text_box.x, text_box.y, text_box.w, h};
 
         // favor pressed over active
@@ -439,8 +445,9 @@ int list_view(SDL_Rect box, std::vector<std::string> const & entries, unsigned i
         auto text_surf_ptr = fa.text(entries[n]);
         SDL_SetSurfaceColorMod(text_surf_ptr.get(), 0, 0, 0);
 
-        SDL_Rect tmp_rect = text_box;
-        SDL_BlitSurface(text_surf_ptr.get(), &src_rect, gc.target_surface, &tmp_rect);
+        SDL_Rect src_rect { 0, 0, text_box.w, h };
+        SDL_Rect tmp_rect { text_box.x, text_box.y, std::min(text_surf_ptr->w, text_box.w), std::min(text_surf_ptr->h, h) };
+        gc.blit(text_surf_ptr.get(), &src_rect, &tmp_rect);
 
         if (is_button_active(abs_rect, gei))
             selection = n;

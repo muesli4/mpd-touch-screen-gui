@@ -572,7 +572,7 @@ int main(int argc, char * argv[])
                             if (!cover_surface_ptr)
                                 std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, screen, fa, mpdc);
                             SDL_Rect r = view_rect;
-                            SDL_BlitSurface(cover_surface_ptr.get(), nullptr, screen, &r);
+                            gc.blit(cover_surface_ptr.get(), nullptr, &r);
                             view_dirty = false;
                         }
                         else
