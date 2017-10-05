@@ -107,6 +107,7 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_thr
     }
 }
 
+// TODO color themes
 struct gui_context
 {
     gui_context(
@@ -120,20 +121,25 @@ struct gui_context
         , dir_unambig_factor_threshold(dir_unambig_factor_threshold)
         , touch_distance_threshold_high(touch_distance_threshold_high)
         , swipe_wait_debounce_threshold(swipe_wait_debounce_threshold)
-        , button_bg_color{25, 25, 25}//{230, 230, 230}
-        , button_fg_color{235, 235, 235}//{20, 20, 20}
-        , button_frame_color{105, 105, 105}//{150, 150, 150}
-        , button_selected_bg_color{105, 55, 55}//{250, 200, 200}
+        , button_bg_color{25, 25, 25}
+        , button_fg_color{235, 235, 235}
+        , button_frame_color{105, 105, 105}
+        , button_selected_bg_color{105, 55, 55}
         , entry_bg_color{255, 255, 255}
         , entry_frame_color{100, 100, 100}
         , entry_selected_bg_color{250, 200, 200}
-        , bg_color{0, 0, 0} //250, 250, 250}
+        , bg_color{0, 0, 0}
         , active_color{230, 230, 255}
     {
-        // FIXME none of those work, why?
-        //renderer = SDL_GetRenderer(w);
-        //renderer = SDL_CreateRenderer(w, -1, 0);
-        renderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(w));
+        // renderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(w));
+
+        // sometimes a renderer is already associated with the window
+        renderer = SDL_GetRenderer(w);
+
+        if (renderer == nullptr)
+            renderer = SDL_CreateRenderer(w, -1, 0);
+        if (renderer == nullptr)
+            throw std::runtime_error("Failed to create renderer: " + std::string(SDL_GetError()));
     }
 
     ~gui_context()

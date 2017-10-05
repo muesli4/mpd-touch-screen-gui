@@ -727,7 +727,7 @@ int main(int argc, char * argv[])
                 }
                 gc.render();
                 // necessary with software rendering
-                SDL_UpdateWindowSurface(window);
+                //SDL_UpdateWindowSurface(window);
             }
         }
 
