@@ -12,9 +12,15 @@ void print_rect(SDL_Rect const & r)
     std::cout << r.x << " " << r.y << " on " << r.w << "x" << r.h << std::endl;
 }
 
-SDL_Surface * create_surface(SDL_PixelFormat const * fmt, int width, int height)
+// create a surface with a pixel format enum and dimensions
+SDL_Surface * create_surface(uint32_t pfe, int width, int height)
 {
-    return SDL_CreateRGBSurface(0, width, height, fmt->BitsPerPixel, fmt->Rmask, fmt->Gmask, fmt->Bmask, fmt->Amask);
+    return SDL_CreateRGBSurface(0, width, height, SDL_BITSPERPIXEL(pfe), 0, 0, 0, 0);
+}
+
+SDL_Surface * create_surface(SDL_PixelFormat const * pf, int width, int height)
+{
+    return SDL_CreateRGBSurface(0, width, height, pf->BitsPerPixel, pf->Rmask, pf->Gmask, pf->Bmask, pf->Amask);
 }
 
 void blit_preserve_ar(SDL_Surface * source, SDL_Surface * dest, SDL_Rect const * destrect)

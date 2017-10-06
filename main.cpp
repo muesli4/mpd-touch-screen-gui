@@ -88,9 +88,9 @@ unsigned int const TOUCH_DISTANCE_THRESHOLD_HIGH = 10;
 std::array<char const * const, 3> const cover_extensions = { "png", "jpeg", "jpg" };
 std::array<char const * const, 3> const cover_names = { "front", "cover", "back" };
 
-SDL_Surface * create_cover_replacement(SDL_PixelFormat const * fmt, SDL_Rect brect, font_atlas & fa, std::string title, std::string artist, std::string album)
+SDL_Surface * create_cover_replacement(uint32_t pfe, SDL_Rect brect, font_atlas & fa, std::string title, std::string artist, std::string album)
 {
-    SDL_Surface * target_surface = create_surface(fmt, brect.w, brect.h);
+    SDL_Surface * target_surface = create_surface(pfe, brect.w, brect.h);
 
     SDL_FillRect(target_surface, nullptr, SDL_MapRGB(target_surface->format, 0, 0, 0));
 
@@ -141,14 +141,14 @@ enum class cover_type
     SONG_INFO
 };
 
-std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string song_path, SDL_PixelFormat const * fmt, font_atlas & fa, mpd_control & mpdc)
+std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string song_path, uint32_t pfe, font_atlas & fa, mpd_control & mpdc)
 {
     SDL_Rect cover_rect { 0, 0, w, h};
     SDL_Surface * cover_surface;
     SDL_Surface * img_surface = load_cover(song_path);
     if (img_surface != nullptr)
     {
-        cover_surface = create_surface(fmt, cover_rect.w, cover_rect.h);
+        cover_surface = create_surface(pfe, cover_rect.w, cover_rect.h);
         blit_preserve_ar(img_surface, cover_surface, &cover_rect);
         SDL_FreeSurface(img_surface);
         return std::make_pair(cover_type::IMAGE, unique_surface_ptr(cover_surface));
@@ -157,7 +157,7 @@ std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string
     {
         return std::make_pair(
             cover_type::SONG_INFO, 
-            unique_surface_ptr(create_cover_replacement(fmt, cover_rect, fa, mpdc.get_current_title(), mpdc.get_current_artist(), mpdc.get_current_album()))
+            unique_surface_ptr(create_cover_replacement(pfe, cover_rect, fa, mpdc.get_current_title(), mpdc.get_current_artist(), mpdc.get_current_album()))
         );
     }
 }
@@ -387,7 +387,7 @@ int main(int argc, char * argv[])
 #endif
         );
 
-    SDL_Surface * screen = SDL_GetWindowSurface(window);
+    uint32_t const pixel_format_enum = SDL_GetWindowPixelFormat(window);
 
     {
         // loop state
@@ -572,7 +572,10 @@ int main(int argc, char * argv[])
                         if (current_song_exists)
                         {
                             if (!cover_surface_ptr)
-                                std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, screen->format, fa, mpdc);
+                            {
+                                std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, pixel_format_enum, fa, mpdc);
+
+                            }
                             SDL_Rect r = view_rect;
                             gc.blit(cover_surface_ptr.get(), nullptr, &r);
                             view_dirty = false;
@@ -725,9 +728,7 @@ int main(int argc, char * argv[])
                         }
                     }
                 }
-                gc.render();
-                // necessary with software rendering
-                //SDL_UpdateWindowSurface(window);
+                gc.present();
             }
         }
 

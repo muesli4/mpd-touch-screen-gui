@@ -148,7 +148,7 @@ struct gui_context
         SDL_DestroyRenderer(renderer);
     }
 
-    void render()
+    void present()
     {
         SDL_RenderPresent(renderer);
     }
