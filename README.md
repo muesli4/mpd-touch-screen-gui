@@ -4,9 +4,9 @@ This the frontend GUI application for my DIY HiFi system and digital audio strea
 
 As the display lacks any hardware acceleration and is run from the framebuffer, the draw operations are largely reduced. I.e. there is no periodic rendering. The screen is updated when necessary.
 
-## How to adapt to your needs
+## Configuration
 
-You will have to change the cover path constants. Most of the other parts are system agnostic. You may disable the dimming functionality (by removing macro definitions) and change other constants to your liking.
+The repository ships with a default configuration file (place it in your config folder, usually `$HOME/.config`, or with the executable). All of the settings are pretty self-explanatory.
 
 # Features
 
@@ -32,10 +32,13 @@ You will have to change the cover path constants. Most of the other parts are sy
 * sdl2
 * libmpdclient
 * icu-uc
+* boost_filesystem
+* boost_system
+* C++17
 
 # State
 
-Still experimental but pretty functional overall. I used a quick and dirty implementation of an IMGUI library (mostly for rapid development and learning purposes).
+Still experimental but pretty functional overall. I used a quick and dirty implementation of an IMGUI library (mostly for rapid development and learning purposes) which will be replaced soon. Sit tight for improvements and extended functionality (e.g., control all of the UI with an infa-red remote control).
 
 # Contact
 
