@@ -234,12 +234,17 @@ void refresh_current_playlist(std::vector<std::string> & cpl, unsigned int & cpv
     }
 }
 
+bool idle_timer_enabled(program_config const & cfg)
+{
+    return cfg.dim_idle_timer.delay.count() != 0;
+}
+
 quit_action program(program_config const & cfg)
 {
     quit_action result;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS
-                            | (cfg.dim_idle_timer.delay.count() == 0 ? 0 : SDL_INIT_TIMER)
+                            | (!idle_timer_enabled(cfg) ? 0 : SDL_INIT_TIMER)
             );
     std::atexit(SDL_Quit);
 
@@ -311,7 +316,7 @@ quit_action program(program_config const & cfg)
         bool dimmed = false;
 
         // timer is enabled
-        if (cfg.dim_idle_timer.delay.count() != 0)
+        if (idle_timer_enabled(cfg))
         {
             // act as if the timer expired and it should dim now
             dimmed = true;
@@ -399,7 +404,7 @@ quit_action program(program_config const & cfg)
                     if (dimmed)
                         continue;
                 }
-                else if (cfg.dim_idle_timer.delay.count() != 0)
+                else if (idle_timer_enabled(cfg))
                 {
                     if (dimmed)
                     {
