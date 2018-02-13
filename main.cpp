@@ -372,12 +372,17 @@ quit_action program(program_config const & cfg)
 
         // TODO check for error?
         uint32_t const user_event_type = SDL_RegisterEvents(1);
-#ifdef DIM_IDLE_TIMER
         idle_timer_info iti(user_event_type);
-        bool dimmed = true;
-        // act as if the timer expired and it should dim now
-        push_user_event(user_event_type, user_event::TIMER_EXPIRED);
-#endif
+
+        bool dimmed = false;
+
+        // timer is enabled
+        if (cfg.dim_idle_timer.delay.count() != 0)
+        {
+            // act as if the timer expired and it should dim now
+            dimmed = true;
+            push_user_event(user_event_type, user_event::TIMER_EXPIRED);
+        }
 
         mpd_control mpdc(
             [&](song_change_info sci)
@@ -440,34 +445,27 @@ quit_action program(program_config const & cfg)
                             cover_surface_ptr.reset();
                             break;
                         case user_event::PLAYLIST_CHANGED:
-#ifdef DIM_IDLE_TIMER
                             if (dimmed)
                                 current_playlist_needs_refresh = true;
                             else
-#endif
                             {
                                 refresh_current_playlist(cpl, cpv, mpdc);
                                 present_search_results = false;
                             }
                             break;
-#ifdef DIM_IDLE_TIMER
                         case user_event::TIMER_EXPIRED:
                             dimmed = true;
-                            system(cfg.dim_idle_timer.dim_command);
+                            system(cfg.dim_idle_timer.dim_command.c_str());
                             continue;
-#endif
                         default:
                             break;
                     }
-#ifdef DIM_IDLE_TIMER
                     // handle change events, but nothing else
                     // TODO not optimal since playlist changes are technically not necessary
                     if (dimmed)
                         continue;
-#endif
                 }
-#ifdef DIM_IDLE_TIMER
-                else
+                else if (cfg.dim_idle_timer.delay.count() != 0)
                 {
                     if (dimmed)
                     {
@@ -479,7 +477,7 @@ quit_action program(program_config const & cfg)
                         }
                         // ignore one event, turn on lights
                         dimmed = false;
-                        system(cfg.dim_idle_timer.undim_command);
+                        system(cfg.dim_idle_timer.undim_command.c_str());
                         iti.sync();
                         SDL_AddTimer(std::chrono::milliseconds(cfg.dim_idle_timer.delay).count(), idle_timer_cb, &iti);
                         // force a refresh
@@ -491,7 +489,7 @@ quit_action program(program_config const & cfg)
                         iti.signal_user_activity();
                     }
                 }
-#endif
+
                 apply_sdl_event(ev, gei, SWIPE_THRESHOLD_LOW_X, SWIPE_THRESHOLD_LOW_Y);
 
                 // global buttons
@@ -605,29 +603,24 @@ quit_action program(program_config const & cfg)
                             }
                             else
                             {
-                                v_layout vl(6, 4, pad_box(view_rect, 4));
+                                vec const & osk_size = cfg.on_screen_keyboard.size;
+                                char const * keys = cfg.on_screen_keyboard.keys.c_str();
+
+                                v_layout vl(osk_size.h, 4, pad_box(view_rect, 4));
 
                                 auto top_box = vl.box();
 
-                                // TODO read from config
-                                // draw keys
-                                std::array<char const * const, 5> letters
-                                    { "abcdef"
-                                    , "ghijkl"
-                                    , "mnopqr"
-                                    , "stuvwx"
-                                    , "yzäöü "
-                                    };
                                 vl.next();
 
-                                for (char const * row_ptr : letters)
                                 {
-                                    h_layout hl(6, 4, vl.box());
-                                    while (*row_ptr != 0)
+                                    h_layout hl(osk_size.w, 4, vl.box());
+                                    for (int i = 0; i < osk_size.h * osk_size.w; ++i)
                                     {
+                                        if (*keys == '\0')
+                                            break;
                                         char buff[8];
 
-                                        int const num_bytes = fetch_utf8(buff, row_ptr);
+                                        int const num_bytes = fetch_utf8(buff, keys);
 
                                         if (num_bytes == 0)
                                             break;
@@ -636,18 +629,23 @@ quit_action program(program_config const & cfg)
                                             if (text_button(hl.box(), buff, fa, gc))
                                                 search_term += buff;
                                             hl.next();
-                                            row_ptr += num_bytes;
+                                            keys += num_bytes;
+                                        }
+
+                                        if (i % osk_size.w == osk_size.w - 1)
+                                        {
+                                            vl.next();
+                                            hl.reset(vl.box());
                                         }
                                     }
-                                    vl.next();
                                 }
 
                                 // render controls (such that a redraw is not necessary)
                                 {
-                                    h_layout hl(6, 4, top_box);
-                                    auto search_term_box = hl.box(4);
+                                    h_layout hl(osk_size.w, 4, top_box);
+                                    auto search_term_box = hl.box(osk_size.w - 2);
 
-                                    hl.next(4);
+                                    hl.next(osk_size.w - 2);
 
                                     if (text_button(hl.box(), "⌫", fa, gc) && !search_term.empty())
                                     {

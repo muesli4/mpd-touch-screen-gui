@@ -373,6 +373,12 @@ struct base_layout
         _box_num += n;
     }
 
+    void reset(SDL_Rect box)
+    {
+        _box_num = 0;
+        _outer_box = box;
+    }
+
     protected:
 
     int _spacing;
