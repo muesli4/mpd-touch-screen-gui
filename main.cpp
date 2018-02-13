@@ -21,11 +21,14 @@
 
 #include <unicode/unistr.h>
 
+#include <experimental/filesystem>
+
 #include "mpd_control.hpp"
 #include "util.hpp"
 #include "sdl_util.hpp"
 #include "font_atlas.hpp"
 #include "gui.hpp"
+#include "program_config.hpp"
 
 // future feature list and ideas:
 // TODO replace cycling with a menu
@@ -43,50 +46,18 @@
 //                  this may also be used for a remote control, if a popup exists draw it
 //                  over everything, remove the popup with a timer by simply sending a refresh event
 
-#ifndef __arm__
-// define this to test it on a local machine
-#define TEST_BUILD
-#endif
-
 // enable dimming functionality
 //#define DIM_IDLE_TIMER
-
-#ifdef TEST_BUILD
-char const * const BASE_DIR = "/home/moritz/Musik/";
-char const * const SHUTDOWN_CMD = "echo Shutting down";
-char const * const REBOOT_CMD = "echo Rebooting";
-char const * const DIM_CMD = "echo dimming";
-char const * const UNDIM_CMD = "echo undimming";
-#else
-char const * const BASE_DIR = "/mnt/music/library/";
-char const * const SHUTDOWN_CMD = "sudo poweroff";
-char const * const REBOOT_CMD = "sudo reboot";
-char const * const DIM_CMD = "display-pwm.sh 1024";
-char const * const UNDIM_CMD = "display-pwm.sh 0";
-#endif
-
-#ifdef DIM_IDLE_TIMER
-// after the delay without activity DIM_CMD is executed, once user input happens
-// again, UNDIM_CMD is executed
-std::chrono::minutes const IDLE_TIMER_DELAY(3);
-#endif
 
 // determines the minimum length of a swipe
 unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
 unsigned int const SWIPE_THRESHOLD_LOW_Y = SWIPE_THRESHOLD_LOW_X;
-
-// determines how unambiguous a swipe has to be to count as either horizontal or vertical
-double const DIR_UNAMBIG_FACTOR_THRESHOLD = 0.3;
 
 // the time to wait after a swipe, before allowing touch events
 std::chrono::milliseconds const SWIPE_WAIT_DEBOUNCE_THRESHOLD(400);
 
 // determines how long a swipe is still recognized as a touch
 unsigned int const TOUCH_DISTANCE_THRESHOLD_HIGH = 10;
-
-// cover extensions and names in order of preference
-std::array<char const * const, 3> const cover_extensions = { "png", "jpeg", "jpg" };
-std::array<char const * const, 3> const cover_names = { "front", "cover", "back" };
 
 SDL_Surface * create_cover_replacement(uint32_t pfe, SDL_Rect brect, font_atlas & fa, std::string title, std::string artist, std::string album)
 {
@@ -118,13 +89,13 @@ SDL_Surface * create_cover_replacement(uint32_t pfe, SDL_Rect brect, font_atlas 
     return target_surface;
 }
 
-SDL_Surface * load_cover(std::string rel_song_dir_path)
+SDL_Surface * load_cover(std::string rel_song_dir_path, std::string base_dir, std::vector<std::string> names, std::vector<std::string> extensions)
 {
-    std::string const abs_cover_dir = absolute_cover_path(BASE_DIR, basename(rel_song_dir_path));
+    std::string const abs_cover_dir = absolute_cover_path(base_dir, basename(rel_song_dir_path));
     SDL_Surface * cover;
-    for (auto const & name : cover_names)
+    for (auto const & name : names)
     {
-        for (auto const & ext : cover_extensions)
+        for (auto const & ext : extensions)
         {
             std::string cover_path = abs_cover_dir + name + "." + ext;
             cover = IMG_Load(cover_path.c_str());
@@ -141,11 +112,15 @@ enum class cover_type
     SONG_INFO
 };
 
-std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string song_path, uint32_t pfe, font_atlas & fa, mpd_control & mpdc)
+std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string song_path, uint32_t pfe, font_atlas & fa, mpd_control & mpdc, cover_config const & cfg)
 {
     SDL_Rect cover_rect { 0, 0, w, h};
     SDL_Surface * cover_surface;
-    SDL_Surface * img_surface = load_cover(song_path);
+    SDL_Surface * img_surface = nullptr;
+
+    if (cfg.directory.has_value())
+        img_surface = load_cover(song_path, cfg.directory.value(), cfg.names, cfg.extensions);
+
     if (img_surface != nullptr)
     {
         cover_surface = create_surface(pfe, cover_rect.w, cover_rect.h);
@@ -242,9 +217,7 @@ enum class user_event
     RANDOM_CHANGED,
     SONG_CHANGED,
     PLAYLIST_CHANGED,
-#ifdef DIM_IDLE_TIMER
     TIMER_EXPIRED,
-#endif
     REFRESH
 };
 
@@ -266,7 +239,6 @@ template <typename T> void push_change_event(uint32_t event_type, user_event ue,
     }
 }
 
-#ifdef DIM_IDLE_TIMER
 struct idle_timer_info
 {
     idle_timer_info(uint32_t uet) : user_event_type(uet) {}
@@ -314,14 +286,11 @@ Uint32 idle_timer_cb(Uint32 interval, void * iti_ptr)
         return 0;
     }
 }
-#endif
 
 bool is_quit_event(SDL_Event const & ev)
 {
     return ev.type == SDL_QUIT
-#ifdef TEST_BUILD
-           || (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_q)
-#endif
+           || (ev.type == SDL_KEYDOWN && ev.key.keysym.mod & KMOD_CTRL && ev.key.keysym.sym == SDLK_q)
            ;
 
 }
@@ -337,33 +306,25 @@ void refresh_current_playlist(std::vector<std::string> & cpl, unsigned int & cpv
     }
 }
 
-int main(int argc, char * argv[])
+quit_action program(program_config const & cfg)
 {
-    // TODO move to config
-    char const * const DEFAULT_FONT_PATH = "/usr/share/fonts/TTF/DejaVuSans.ttf";
-
-    quit_action quit_action = quit_action::NONE;
+    quit_action result;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS
-#ifdef DIM_IDLE_TIMER
-                            | SDL_INIT_TIMER
-#endif
+                            | (cfg.dim_idle_timer.delay.count() == 0 ? 0 : SDL_INIT_TIMER)
             );
     std::atexit(SDL_Quit);
 
     // determine screen size of display 0
     SDL_DisplayMode mode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
-#ifndef TEST_BUILD
     if (SDL_GetDisplayMode(0, 0, &mode) != 0)
     {
         std::cerr << "Could not determine screen size:"
                   << SDL_GetError() << '.' << std::endl;
         std::exit(0);
     }
-#else
-    mode.w = 320;
-    mode.h = 240;
-#endif
+    mode.w = std::min(cfg.display.resolution.w, mode.w);
+    mode.h = std::min(cfg.display.resolution.h, mode.h);
 
     // font rendering setup
     if (TTF_Init() == -1)
@@ -380,11 +341,7 @@ int main(int argc, char * argv[])
         , SDL_WINDOWPOS_UNDEFINED
         , mode.w
         , mode.h
-#ifdef TEST_BUILD
-        , 0
-#else
-        , SDL_WINDOW_FULLSCREEN
-#endif
+        , cfg.display.fullscreen ? SDL_WINDOW_FULLSCREEN : 0
         );
 
     uint32_t const pixel_format_enum = SDL_GetWindowPixelFormat(window);
@@ -452,10 +409,10 @@ int main(int argc, char * argv[])
         std::tie(cpl, cpv) = mpdc.get_current_playlist();
         random = mpdc.get_random();
 
-        font_atlas fa(DEFAULT_FONT_PATH, 20);
-        font_atlas fa_small(DEFAULT_FONT_PATH, 15);
+        font_atlas fa(cfg.font_path, 20);
+        font_atlas fa_small(cfg.font_path, 15);
         gui_event_info gei;
-        gui_context gc(gei, window, DIR_UNAMBIG_FACTOR_THRESHOLD, TOUCH_DISTANCE_THRESHOLD_HIGH, SWIPE_WAIT_DEBOUNCE_THRESHOLD);
+        gui_context gc(gei, window, cfg.swipe.dir_unambig_factor_threshold, TOUCH_DISTANCE_THRESHOLD_HIGH, SWIPE_WAIT_DEBOUNCE_THRESHOLD);
 
         bool run = true;
         SDL_Event ev;
@@ -469,9 +426,7 @@ int main(int argc, char * argv[])
             }
             // most of the events are not required for a standalone fullscreen application
             else if (is_input_event(ev) || ev.type == user_event_type
-#ifdef TEST_BUILD
                                         || ev.type == SDL_WINDOWEVENT
-#endif
                     )
             {
                 // handle asynchronous user events synchronously
@@ -498,7 +453,7 @@ int main(int argc, char * argv[])
 #ifdef DIM_IDLE_TIMER
                         case user_event::TIMER_EXPIRED:
                             dimmed = true;
-                            system(DIM_CMD);
+                            system(cfg.dim_idle_timer.dim_command);
                             continue;
 #endif
                         default:
@@ -524,9 +479,9 @@ int main(int argc, char * argv[])
                         }
                         // ignore one event, turn on lights
                         dimmed = false;
-                        system(UNDIM_CMD);
+                        system(cfg.dim_idle_timer.undim_command);
                         iti.sync();
-                        SDL_AddTimer(std::chrono::milliseconds(IDLE_TIMER_DELAY).count(), idle_timer_cb, &iti);
+                        SDL_AddTimer(std::chrono::milliseconds(cfg.dim_idle_timer.delay).count(), idle_timer_cb, &iti);
                         // force a refresh
                         ev.type = user_event_type;
                         ev.user.code = static_cast<int>(user_event::REFRESH);
@@ -573,7 +528,7 @@ int main(int argc, char * argv[])
                         {
                             if (!cover_surface_ptr)
                             {
-                                std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, pixel_format_enum, fa, mpdc);
+                                std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, pixel_format_enum, fa, mpdc, cfg.cover);
 
                             }
                             SDL_Rect r = view_rect;
@@ -591,8 +546,8 @@ int main(int argc, char * argv[])
 
                     if (current_view == view_type::SHUTDOWN)
                     {
-                        quit_action = shutdown_view(view_rect, fa, gc);
-                        if (quit_action != quit_action::NONE)
+                        result = shutdown_view(view_rect, fa, gc);
+                        if (result != quit_action::NONE)
                             run = false;
                     }
                     else
@@ -654,6 +609,7 @@ int main(int argc, char * argv[])
 
                                 auto top_box = vl.box();
 
+                                // TODO read from config
                                 // draw keys
                                 std::array<char const * const, 5> letters
                                     { "abcdef"
@@ -741,10 +697,44 @@ int main(int argc, char * argv[])
     SDL_DestroyWindow(window);
     SDL_Quit();
 
+    return result;
+}
+
+int main(int argc, char * argv[])
+{
+    quit_action quit_action = quit_action::NONE;
+
+    char const * shutdown_command;
+    char const * reboot_command;
+
+    {
+        bool found = false;
+        program_config cfg;
+        for (auto const & cfg_dir : get_config_directories())
+        {
+            auto cfg_path = cfg_dir / "mpd-touch-screen-gui.conf";
+
+            if (boost::filesystem::exists(cfg_path) && parse_program_config(cfg_path, cfg))
+            {
+                found = true;
+                quit_action = program(cfg);
+                shutdown_command = cfg.system_control.shutdown_command.c_str();
+                reboot_command = cfg.system_control.reboot_command.c_str();
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            std::cerr << "Failed to parse configuration file." << std::endl;
+            return 1;
+        }
+    }
+
     if (quit_action == quit_action::SHUTDOWN)
-        std::system(SHUTDOWN_CMD);
+        std::system(shutdown_command);
     else if (quit_action == quit_action::REBOOT)
-        std::system(REBOOT_CMD);
+        std::system(reboot_command);
 
     return 0;
 }

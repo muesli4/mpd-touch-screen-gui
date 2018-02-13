@@ -4,6 +4,8 @@
 
 #include <SDL2/SDL.h>
 
+#include <iostream>
+
 #include "util.hpp"
 
 bool is_input_event(SDL_Event & ev)
@@ -53,6 +55,8 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_thr
         gei.event_x = e.button.x;
         gei.event_y = e.button.y;
         gei.valid_swipe = false;
+
+        std::cout << "button down " << e.button.x << " " << e.button.y << std::endl;
     }
     else if (e.type == SDL_MOUSEBUTTONUP)
     {
@@ -72,6 +76,8 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_thr
         gei.valid_swipe = gei.abs_xdiff > swipe_threshold_low_x || gei.abs_ydiff > swipe_threshold_low_y;
         if (gei.valid_swipe)
             gei.last_swipe_time_point = std::chrono::steady_clock::now();
+
+        std::cout << "button up " << e.button.x << " " << e.button.y << std::endl;
     }
     else if (e.type == SDL_FINGERDOWN)
     {
@@ -80,6 +86,8 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_thr
         gei.event_x = e.tfinger.x;
         gei.event_y = e.tfinger.y;
         gei.valid_swipe = false;
+
+        std::cout << "finger down " << e.tfinger.x << " " << e.tfinger.y << std::endl;
     }
     // TODO normalization might not longer be necessary
     else if (e.type == SDL_FINGERUP)
@@ -100,6 +108,8 @@ void apply_sdl_event(SDL_Event & e, gui_event_info & gei, unsigned int swipe_thr
         gei.valid_swipe = gei.abs_xdiff > swipe_threshold_low_x || gei.abs_ydiff > swipe_threshold_low_y;
         if (gei.valid_swipe)
             gei.last_swipe_time_point = std::chrono::steady_clock::now();
+
+        std::cout << "finger down " << e.tfinger.x << " " << e.tfinger.y << std::endl;
     }
     else
     {
