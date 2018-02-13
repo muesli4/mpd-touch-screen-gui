@@ -5,7 +5,7 @@ LIBS     = SDL2_ttf SDL2_image sdl2 libmpdclient icu-uc libconfig++
 CXXFLAGS = '-std=c++17' '-std=gnu++17' '-Wall' `pkg-config --cflags $(LIBS)`
 LDFLAGS  = -lpthread `pkg-config --libs $(LIBS)` -lboost_filesystem -lboost_system
 
-OBJ      = main.o mpd_control.o util.o font_atlas.o sdl_util.o program_config.o
+OBJ      = main.o mpd_control.o util.o font_atlas.o sdl_util.o program_config.o idle_timer.o user_event.o
 
 debug: CXXFLAGS += '-ggdb'
 opt:   CXXFLAGS += '-O2'

@@ -29,14 +29,11 @@
 #include "font_atlas.hpp"
 #include "gui.hpp"
 #include "program_config.hpp"
+#include "idle_timer.hpp"
+#include "user_event.hpp"
 
 // future feature list and ideas:
 // TODO replace cycling with a menu
-// TODO when hardware rendering is available replace blits with texture copy of the renderer
-//      for software it doesn't make sense, since the renderer will just make a
-//      copy of the surface to generate a pseudo-texture
-// TODO list view: fade out overlong text when over boundary or move source
-//                 rectangle with time / alternatively use manual controls (e.g., horizontal swipe)
 // TODO playlist view: use several tags and display in different cells:
 //          - use a header colum (expand when clicked)
 //          - scroll with swipe
@@ -45,9 +42,6 @@
 // TODO cover view: show a popup when an action has been executed (use timer to refresh)
 //                  this may also be used for a remote control, if a popup exists draw it
 //                  over everything, remove the popup with a timer by simply sending a refresh event
-
-// enable dimming functionality
-//#define DIM_IDLE_TIMER
 
 // determines the minimum length of a swipe
 unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
@@ -212,78 +206,12 @@ quit_action shutdown_view(SDL_Rect box, font_atlas & fa, gui_context & gc)
     return quit_action::NONE;
 }
 
-enum class user_event
-{
-    RANDOM_CHANGED,
-    SONG_CHANGED,
-    PLAYLIST_CHANGED,
-    TIMER_EXPIRED,
-    REFRESH
-};
-
-void push_user_event(uint32_t event_type, user_event ue)
-{
-    SDL_Event e;
-    SDL_memset(&e, 0, sizeof(e));
-    e.type = event_type;
-    e.user.code = (int)ue;
-    SDL_PushEvent(&e);
-}
-
 template <typename T> void push_change_event(uint32_t event_type, user_event ue, T & old_val, T const & new_val)
 {
     if (old_val != new_val)
     {
         old_val = new_val;
         push_user_event(event_type, ue);
-    }
-}
-
-struct idle_timer_info
-{
-    idle_timer_info(uint32_t uet) : user_event_type(uet) {}
-
-    uint32_t const user_event_type;
-
-    void sync()
-    {
-        _start_tp = std::chrono::steady_clock::now();
-        _last_activity_tp = _start_tp;
-    }
-
-    void signal_user_activity()
-    {
-        _last_activity_tp = std::chrono::steady_clock::now();
-    }
-
-    std::chrono::milliseconds remaining_ms()
-    {
-        using namespace std::chrono;
-        return duration_cast<milliseconds>(_last_activity_tp - _start_tp);
-    }
-
-    private:
-
-    std::chrono::time_point<std::chrono::steady_clock> _last_activity_tp;
-    std::chrono::time_point<std::chrono::steady_clock> _start_tp;
-};
-
-Uint32 idle_timer_cb(Uint32 interval, void * iti_ptr)
-{
-
-    idle_timer_info & iti = *reinterpret_cast<idle_timer_info *>(iti_ptr);
-
-    auto rem_ms = iti.remaining_ms();
-
-    if (rem_ms.count() > 0)
-    {
-        iti.sync();
-        return rem_ms.count();
-    }
-    else
-    {
-        push_user_event(iti.user_event_type, user_event::TIMER_EXPIRED);
-        return 0;
     }
 }
 
@@ -323,8 +251,13 @@ quit_action program(program_config const & cfg)
                   << SDL_GetError() << '.' << std::endl;
         std::exit(0);
     }
-    mode.w = std::min(cfg.display.resolution.w, mode.w);
-    mode.h = std::min(cfg.display.resolution.h, mode.h);
+
+    // Pick maximum resolution in fullscreen.
+    if (!cfg.display.fullscreen)
+    {
+        mode.w = std::min(cfg.display.resolution.w, mode.w);
+        mode.h = std::min(cfg.display.resolution.h, mode.h);
+    }
 
     // font rendering setup
     if (TTF_Init() == -1)
@@ -353,7 +286,8 @@ quit_action program(program_config const & cfg)
 
         bool random;
         view_type current_view = view_type::COVER_SWIPE;
-        bool view_dirty = false;
+        // redraw two times to fill every buffer
+        int view_dirty_count = 0;
 
         unique_surface_ptr cover_surface_ptr;
         cover_type cover_type;
@@ -501,7 +435,7 @@ quit_action program(program_config const & cfg)
                     if (text_button(l.box(), "♫", fa, gc))
                     {
                         current_view = cycle_view_type(current_view);
-                        view_dirty = true;
+                        view_dirty_count = 2;
                     }
                     l.next();
                     if (text_button(l.box(), "►", fa, gc))
@@ -512,7 +446,7 @@ quit_action program(program_config const & cfg)
 
                 }
 
-                SDL_Rect const view_rect = {40, 0, mode.w - 40, mode.h};
+                SDL_Rect const view_rect { 40, 0, mode.w - 40, mode.h };
 
                 // view area
                 if (current_view == view_type::COVER_SWIPE)
@@ -520,7 +454,7 @@ quit_action program(program_config const & cfg)
                     swipe_action a = swipe_area(view_rect, gc);
 
                     // redraw cover if it is a new one or if marked dirty
-                    if (view_dirty || !cover_surface_ptr)
+                    if (view_dirty_count != 0 || !cover_surface_ptr)
                     {
                         if (current_song_exists)
                         {
@@ -531,7 +465,7 @@ quit_action program(program_config const & cfg)
                             }
                             SDL_Rect r = view_rect;
                             gc.blit(cover_surface_ptr.get(), nullptr, &r);
-                            view_dirty = false;
+                            view_dirty_count--;
                         }
                         else
                             gc.draw_background(view_rect);
