@@ -244,7 +244,7 @@ quit_action program(program_config const & cfg)
     quit_action result;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS
-                            | (!idle_timer_enabled(cfg) ? 0 : SDL_INIT_TIMER)
+                            | (idle_timer_enabled(cfg) ? SDL_INIT_TIMER : 0)
             );
     std::atexit(SDL_Quit);
 
@@ -272,7 +272,6 @@ quit_action program(program_config const & cfg)
         std::exit(0);
     }
 
-    // create window
     SDL_Window * window = SDL_CreateWindow
         ( "mpc-touch-lcd-gui"
         , SDL_WINDOWPOS_UNDEFINED
@@ -319,7 +318,6 @@ quit_action program(program_config const & cfg)
         if (idle_timer_enabled(cfg))
         {
             // act as if the timer expired and it should dim now
-            dimmed = true;
             push_user_event(user_event_type, user_event::TIMER_EXPIRED);
         }
 
@@ -404,7 +402,7 @@ quit_action program(program_config const & cfg)
                     if (dimmed)
                         continue;
                 }
-                else if (idle_timer_enabled(cfg))
+                else if (idle_timer_enabled(cfg) && ev.type != SDL_WINDOWEVENT)
                 {
                     if (dimmed)
                     {
@@ -418,8 +416,9 @@ quit_action program(program_config const & cfg)
                         dimmed = false;
                         system(cfg.dim_idle_timer.undim_command.c_str());
                         iti.sync();
+                        // TODO refactor into class
                         SDL_AddTimer(std::chrono::milliseconds(cfg.dim_idle_timer.delay).count(), idle_timer_cb, &iti);
-                        // force a refresh
+                        // force a refresh by rebranding it - kind of hacky
                         ev.type = user_event_type;
                         ev.user.code = static_cast<int>(user_event::REFRESH);
                     }
