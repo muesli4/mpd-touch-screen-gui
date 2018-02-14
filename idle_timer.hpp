@@ -2,7 +2,10 @@
 #define IDLE_TIMER_HPP
 
 #include <chrono>
+#include <cstdint>
 
+// This is a helper class to use a single SDL timer without the need to stop it
+// all the time.
 struct idle_timer_info
 {
     idle_timer_info(uint32_t uet);
