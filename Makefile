@@ -7,7 +7,7 @@ LDFLAGS  = -lpthread `pkg-config --libs $(LIBS)` -lboost_filesystem -lboost_syst
 
 OBJ      = main.o mpd_control.o util.o font_atlas.o sdl_util.o program_config.o idle_timer.o user_event.o keypad.o song_list_view.o search_view.o cover_view.o
 
-debug: CXXFLAGS += '-ggdb'
+debug: CXXFLAGS += '-ggdb' '-O0'
 opt:   CXXFLAGS += '-O2'
 
 main: $(OBJ)

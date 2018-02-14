@@ -7,7 +7,7 @@ keypad::keypad(vec size, std::string keys, std::function<void(std::string)> subm
 }
 
 keypad::keypad(vec size, std::tuple<std::shared_ptr<button>, std::vector<table::entry>> tmp)
-    : embedded_widget<table>(size, std::get<1>(tmp))
+    : embedded_widget<table>(size, std::get<1>(tmp), 5)
     , _submit_button(std::get<0>(tmp))
 {
 }
@@ -18,8 +18,12 @@ keypad::~keypad()
 
 void keypad::remove_last()
 {
-    int const len = count_utf8_backwards(_search_term.c_str() + _search_term.size() - 1);
-    _search_term.resize(_search_term.size() - len);
+    if (!_search_term.empty())
+    {
+        int const len = count_utf8_backwards(_search_term.c_str() + _search_term.size() - 1);
+        _search_term.resize(_search_term.size() - len);
+        update();
+    }
 }
 
 void keypad::update()
@@ -45,22 +49,23 @@ std::tuple<std::shared_ptr<button>, std::vector<table::entry>> keypad::construct
     char const * letter_ptr = keys.c_str();
     std::vector<table::entry> table_entries;
 
-    auto submit_button = std::make_shared<button>("''", [=](){ submit_callback(_search_term); });
+    auto submit_button = std::make_shared<button>("''", [this, submit_callback]{ submit_callback(this->_search_term); });
 
     table_entries.reserve(3 + num_letter_keys);
-    table_entries.push_back({ { 0, 0, size.w - 3, 1 }, submit_button });
+
+    table_entries.push_back({ { 0, 0, size.w - 2, 1 }, submit_button });
     table_entries.push_back(
         { { size.w - 2, 0, 1, 1}
-        , std::make_shared<button>("⌫", [=](){ remove_last(); })
+        , std::make_shared<button>("⌫", [this]{ remove_last(); })
         });
     table_entries.push_back(
         { { size.w - 1, 0, 1, 1}
-        , std::make_shared<button>("⌫", [=](){ clear(); })
+        , std::make_shared<button>("⌫", [this]{ clear(); })
         });
 
     {
-        int row = 1;
-        int column = 0;
+        int y = 1;
+        int x = 0;
         for (int i = 0; i < num_letter_keys; ++i)
         {
             if (*letter_ptr == '\0')
@@ -74,15 +79,15 @@ std::tuple<std::shared_ptr<button>, std::vector<table::entry>> keypad::construct
             else
             {
                 std::string char_utf8(buff, num_bytes);
-                table_entries.push_back({ { row, column, 1, 1 }, std::make_shared<button>(char_utf8, [=](){ append(char_utf8); }) });
-                keys += num_bytes;
-                column += 1;
+                table_entries.push_back({ { x, y, 1, 1 }, std::make_shared<button>(char_utf8, [this, char_utf8]{ append(char_utf8); }) });
+                letter_ptr += num_bytes;
+                x += 1;
             }
 
             if (i % size.w == size.w - 1)
             {
-                row += 1;
-                column = 0;
+                y += 1;
+                x = 0;
             }
         }
     }

@@ -15,22 +15,36 @@
 
 #include <cstdlib>
 
+#include <boost/filesystem.hpp>
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 
-#include <unicode/unistr.h>
-
-#include <experimental/filesystem>
-
 #include "mpd_control.hpp"
-#include "util.hpp"
-#include "sdl_util.hpp"
-#include "font_atlas.hpp"
-#include "gui.hpp"
 #include "program_config.hpp"
 #include "idle_timer.hpp"
 #include "user_event.hpp"
+
+//#include "util.hpp"
+//#include "sdl_util.hpp"
+//#include "font_atlas.hpp"
+//#include "gui.hpp"
+
+#include <libwtk-sdl2/widget.hpp>
+#include <libwtk-sdl2/button.hpp>
+#include <libwtk-sdl2/box.hpp>
+#include <libwtk-sdl2/list_view.hpp>
+#include <libwtk-sdl2/notebook.hpp>
+#include <libwtk-sdl2/widget_context.hpp>
+#include <libwtk-sdl2/padding.hpp>
+#include <libwtk-sdl2/sdl_util.hpp>
+#include <libwtk-sdl2/util.hpp>
+
+#include "cover_view.hpp"
+#include "search_view.hpp"
+#include "song_list_view.hpp"
+
 
 // future feature list and ideas:
 // TODO replace cycling with a menu
@@ -53,102 +67,40 @@ std::chrono::milliseconds const SWIPE_WAIT_DEBOUNCE_THRESHOLD(400);
 // determines how long a swipe is still recognized as a touch
 unsigned int const TOUCH_DISTANCE_THRESHOLD_HIGH = 10;
 
-SDL_Surface * create_cover_replacement(uint32_t pfe, SDL_Rect brect, font_atlas & fa, std::string title, std::string artist, std::string album)
-{
-    SDL_Surface * target_surface = create_surface(pfe, brect.w, brect.h);
 
-    SDL_FillRect(target_surface, nullptr, SDL_MapRGB(target_surface->format, 0, 0, 0));
-
-    std::array<std::string const, 3> lines = { title, artist, album };
-
-    int const offset = fa.font_line_skip() / 2;
-
-    int y_offset = offset;
-
-    for (auto & line : lines)
-    {
-        if (!line.empty())
-        {
-            auto text_surface_ptr = fa.text(line, brect.w - offset);
-
-            if (text_surface_ptr)
-            {
-                SDL_Rect r = { offset, y_offset, text_surface_ptr->w, text_surface_ptr->h };
-                SDL_BlitSurface(text_surface_ptr.get(), 0, target_surface, &r);
-                y_offset += text_surface_ptr->h + offset;
-            }
-        }
-    }
-
-    return target_surface;
-}
-
-SDL_Surface * load_cover(std::string rel_song_dir_path, std::string base_dir, std::vector<std::string> names, std::vector<std::string> extensions)
+std::optional<std::string> find_cover_file(std::string rel_song_dir_path, std::string base_dir, std::vector<std::string> names, std::vector<std::string> extensions)
 {
     std::string const abs_cover_dir = absolute_cover_path(base_dir, basename(rel_song_dir_path));
-    SDL_Surface * cover;
     for (auto const & name : names)
     {
         for (auto const & ext : extensions)
         {
-            std::string cover_path = abs_cover_dir + name + "." + ext;
-            cover = IMG_Load(cover_path.c_str());
-            if (cover) return cover;
+            std::string const cover_path = abs_cover_dir + name + "." + ext;
+            if (boost::filesystem::exists(boost::filesystem::path(cover_path)))
+            {
+                return cover_path;
+            }
         }
     }
 
-    return nullptr;
-}
-
-enum class cover_type
-{
-    IMAGE,
-    SONG_INFO
-};
-
-std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string song_path, uint32_t pfe, font_atlas & fa, mpd_control & mpdc, cover_config const & cfg)
-{
-    SDL_Rect cover_rect { 0, 0, w, h};
-    SDL_Surface * cover_surface;
-    SDL_Surface * img_surface = nullptr;
-
-    if (cfg.directory.has_value())
-        img_surface = load_cover(song_path, cfg.directory.value(), cfg.names, cfg.extensions);
-
-    if (img_surface != nullptr)
-    {
-        cover_surface = create_surface(pfe, cover_rect.w, cover_rect.h);
-        blit_preserve_ar(img_surface, cover_surface, &cover_rect);
-        SDL_FreeSurface(img_surface);
-        return std::make_pair(cover_type::IMAGE, unique_surface_ptr(cover_surface));
-    }
-    else
-    {
-        return std::make_pair(
-            cover_type::SONG_INFO, 
-            unique_surface_ptr(create_cover_replacement(pfe, cover_rect, fa, mpdc.get_current_title(), mpdc.get_current_artist(), mpdc.get_current_album()))
-        );
-    }
+    return std::nullopt;
 }
 
 void handle_cover_swipe_action(swipe_action a, mpd_control & mpdc, unsigned int volume_step)
 {
     switch (a)
     {
-        case swipe_action::SWIPE_UP:
+        case swipe_action::UP:
             mpdc.inc_volume(volume_step);
             break;
-        case swipe_action::SWIPE_DOWN:
+        case swipe_action::DOWN:
             mpdc.dec_volume(volume_step);
             break;
-        case swipe_action::SWIPE_RIGHT:
+        case swipe_action::RIGHT:
             mpdc.next_song();
             break;
-        case swipe_action::SWIPE_LEFT:
+        case swipe_action::LEFT:
             mpdc.prev_song();
-            break;
-        case swipe_action::PRESS:
-            mpdc.toggle_pause();
             break;
         default:
             break;
@@ -175,22 +127,6 @@ enum quit_action
     NONE
 };
 
-quit_action shutdown_view(SDL_Rect box, font_atlas & fa, gui_context & gc)
-{
-    v_layout l(2, 4, pad_box(box, 44));
-
-    if (text_button(l.box(), "Shutdown", fa, gc))
-    {
-        return quit_action::SHUTDOWN;
-    }
-    l.next();
-    if (text_button(l.box(), "Reboot", fa, gc))
-    {
-        return quit_action::REBOOT;
-    }
-    return quit_action::NONE;
-}
-
 template <typename T> void push_change_event(uint32_t event_type, user_event ue, T & old_val, T const & new_val)
 {
     if (old_val != new_val)
@@ -206,6 +142,16 @@ bool is_quit_event(SDL_Event const & ev)
            || (ev.type == SDL_KEYDOWN && ev.key.keysym.mod & KMOD_CTRL && ev.key.keysym.sym == SDLK_q)
            ;
 
+}
+
+bool is_input_event(SDL_Event & ev)
+{
+    return ev.type == SDL_MOUSEBUTTONDOWN ||
+           ev.type == SDL_MOUSEBUTTONUP ||
+           ev.type == SDL_KEYDOWN ||
+           ev.type == SDL_KEYUP ||
+           ev.type == SDL_FINGERDOWN ||
+           ev.type == SDL_FINGERUP;
 }
 
 void refresh_current_playlist(std::vector<std::string> & cpl, unsigned int & cpv, mpd_control & mpdc)
@@ -224,30 +170,21 @@ bool idle_timer_enabled(program_config const & cfg)
     return cfg.dim_idle_timer.delay.count() != 0;
 }
 
-/*
-widget_ptr shutdown_view(quit_action & result, bool & quit)
+widget_ptr make_shutdown_view(quit_action & result, bool & run)
 {
-    return vbox({ std::make_shared<button>("Shutdown", [&](){ result = quit_action::SHUTDOWN; quit = true; })
-                , std::make_shared<button>("Reboot", [&](){ result = quit_action::REBOOT; quit = true; })
+    return vbox({ { false, std::make_shared<button>("Shutdown", [&run, &result](){ result = quit_action::SHUTDOWN; run = false; }) }
+                , { false, std::make_shared<button>("Reboot", [&run, &result](){ result = quit_action::REBOOT; run = false; }) }
                 });
 }
-*/
 
-/*
-widget_ptr queue_view(std::vector<std::string> const & values, std::function<void()> activate_callback, int & current_song_pos)
+std::string random_label(bool random)
 {
-    auto lv = std::make_shared<list_view(values, 0, activate_callback);
-
-    return vbox({ lv , hbox({ std::make_shared<button>("Jump", [=, &current_song_pos](){ lv.set_position(current_song_pos); })
-                            , std::make_shared<button>("▲", [=, &current_song_pos](){}) // TODO
-                            , std::make_shared<button>("▼", [=, &current_song_pos](){}) // TODO
-                            }) })
+    return random ? "¬R" : "R";
 }
-*/
 
 quit_action program(program_config const & cfg)
 {
-    quit_action result;
+    quit_action result = quit_action::NONE;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS
                             | (idle_timer_enabled(cfg) ? SDL_INIT_TIMER : 0)
@@ -286,9 +223,6 @@ quit_action program(program_config const & cfg)
         , mode.h
         , cfg.display.fullscreen ? SDL_WINDOW_FULLSCREEN : 0
         );
-
-    uint32_t const pixel_format_enum = SDL_GetWindowPixelFormat(window);
-
     {
         // loop state
         std::string current_song_path;
@@ -296,23 +230,13 @@ quit_action program(program_config const & cfg)
 
         bool random;
         view_type current_view = view_type::COVER_SWIPE;
-        // redraw two times to fill every buffer
-        int view_dirty_count = 0;
 
-        unique_surface_ptr cover_surface_ptr;
-        cover_type cover_type;
+        bool refresh_cover = true;
 
         unsigned int current_song_pos = 0;
-        unsigned int cpl_view_pos = 0;
         std::vector<std::string> cpl;
         unsigned int cpv;
         bool current_playlist_needs_refresh = false;
-
-        bool present_search_results = false;
-        std::string search_term;
-        std::vector<std::string> search_items;
-        unsigned int search_items_view_pos = 0;
-        std::vector<int> search_item_positions;
 
         // TODO check for error?
         uint32_t const user_event_type = SDL_RegisterEvents(1);
@@ -357,13 +281,41 @@ quit_action program(program_config const & cfg)
         std::tie(cpl, cpv) = mpdc.get_current_playlist();
         random = mpdc.get_random();
 
-        font_atlas fa(cfg.font_path, 20);
-        font_atlas fa_small(cfg.font_path, 15);
-        gui_event_info gei;
-        gui_context gc(gei, window, cfg.swipe.dir_unambig_factor_threshold, TOUCH_DISTANCE_THRESHOLD_HIGH, SWIPE_WAIT_DEBOUNCE_THRESHOLD);
-
         bool run = true;
         SDL_Event ev;
+
+        // TODO move to MVC
+        auto random_button = std::make_shared<button>(random_label(random), [&](){ mpdc.set_random(!random); });
+
+        auto cv = std::make_shared<cover_view>([&](swipe_action a){ handle_cover_swipe_action(a, mpdc, 5); }, [&](){ mpdc.toggle_pause(); });
+        auto slv = std::make_shared<list_view>(cpl, current_song_pos, [&mpdc](std::size_t pos){ mpdc.play_position(pos); });
+
+        auto view_box = std::make_shared<notebook>(std::vector<widget_ptr>{ cv
+                                                   , song_list_view(slv, "Jump", [=, &current_song_pos](){ slv->set_position(current_song_pos); })
+                                                   , std::make_shared<search_view>(cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); })
+                                                   , make_shutdown_view(result, run)
+                                                   });
+        auto button_controls = vbox(
+                { { false, std::make_shared<button>("♫", [&](){ current_view = cycle_view_type(current_view); view_box->set_page(static_cast<int>(current_view));  }) }
+                , { false, std::make_shared<button>("►", [&](){ mpdc.toggle_pause(); }) }
+                , { false, random_button }
+                }, 5);
+
+        box main_widget(box::orientation::HORIZONTAL
+                       , { { false, pad(5, button_controls) }
+                         , { true, pad(5, view_box) }
+                         }, 0, false);
+
+        //button main_widget("button", [](){ std::cout << "test" << std::endl; });
+        //keypad main_widget({ 7, 5 }, std::string("abcdefghijklmnopqrstuvwxyzäöü "), [&](std::string str){ std::cout << str << std::endl; });
+
+    //keypad(vec size, std::string keys, std::function<void(std::string)> submit_callback);
+
+        // TODO for debugging only
+        SDL_Renderer * renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+        //SDL_Renderer * renderer = renderer_from_window(window);
+        widget_context ctx(renderer, { cfg.font_path, 15 }, main_widget);
+        ctx.draw();
 
         while (run && SDL_WaitEvent(&ev) == 1)
         {
@@ -383,9 +335,7 @@ quit_action program(program_config const & cfg)
                     switch (static_cast<user_event>(ev.user.code))
                     {
                         case user_event::SONG_CHANGED:
-                            // TODO do not reset
-                            // if (cover_type == cover_type::IMAGE && same album)
-                            cover_surface_ptr.reset();
+                            refresh_cover = true;
                             break;
                         case user_event::PLAYLIST_CHANGED:
                             if (dimmed)
@@ -393,7 +343,7 @@ quit_action program(program_config const & cfg)
                             else
                             {
                                 refresh_current_playlist(cpl, cpv, mpdc);
-                                present_search_results = false;
+                                // TODO clear search_view
                             }
                             break;
                         case user_event::TIMER_EXPIRED:
@@ -408,225 +358,72 @@ quit_action program(program_config const & cfg)
                     if (dimmed)
                         continue;
                 }
-                else if (idle_timer_enabled(cfg) && ev.type != SDL_WINDOWEVENT)
-                {
-                    if (dimmed)
-                    {
-                        if (current_playlist_needs_refresh)
-                        {
-                            refresh_current_playlist(cpl, cpv, mpdc);
-                            present_search_results = false;
-                            current_playlist_needs_refresh = false;
-                        }
-                        // ignore one event, turn on lights
-                        dimmed = false;
-                        system(cfg.dim_idle_timer.undim_command.c_str());
-                        iti.sync();
-                        // TODO refactor into class
-                        SDL_AddTimer(std::chrono::milliseconds(cfg.dim_idle_timer.delay).count(), idle_timer_cb, &iti);
-                        // force a refresh by rebranding it - kind of hacky
-                        ev.type = user_event_type;
-                        ev.user.code = static_cast<int>(user_event::REFRESH);
-                    }
-                    else
-                    {
-                        iti.signal_user_activity();
-                    }
-                }
-
-                apply_sdl_event(ev, gei, SWIPE_THRESHOLD_LOW_X, SWIPE_THRESHOLD_LOW_Y);
-
-                // global buttons
-                {
-                    SDL_Rect buttons_rect {0, 0, 40, mode.h};
-                    gc.draw_background(buttons_rect);
-                    v_layout l(6, 4, pad_box(buttons_rect, 4));
-
-                    if (text_button(l.box(), "♫", fa, gc))
-                    {
-                        current_view = cycle_view_type(current_view);
-                        view_dirty_count = 2;
-                    }
-                    l.next();
-                    if (text_button(l.box(), "►", fa, gc))
-                        mpdc.toggle_pause();
-                    l.next();
-                    if (text_button(l.box(), random ? "¬R" : "R", fa, gc))
-                        mpdc.set_random(!random);
-
-                }
-
-                SDL_Rect const view_rect { 40, 0, mode.w - 40, mode.h };
-
-                // view area
-                if (current_view == view_type::COVER_SWIPE)
-                {
-                    swipe_action a = swipe_area(view_rect, gc);
-
-                    // redraw cover if it is a new one or if marked dirty
-                    if (view_dirty_count != 0 || !cover_surface_ptr)
-                    {
-                        if (current_song_exists)
-                        {
-                            if (!cover_surface_ptr)
-                            {
-                                std::tie(cover_type, cover_surface_ptr) = create_cover(view_rect.w, view_rect.h, current_song_path, pixel_format_enum, fa, mpdc, cfg.cover);
-
-                            }
-                            SDL_Rect r = view_rect;
-                            gc.blit(cover_surface_ptr.get(), nullptr, &r);
-                            view_dirty_count--;
-                        }
-                        else
-                            gc.draw_background(view_rect);
-                    }
-                    handle_cover_swipe_action(a, mpdc, 5);
-                }
                 else
                 {
-                    gc.draw_background(view_rect);
-
-                    if (current_view == view_type::SHUTDOWN)
+                    if (idle_timer_enabled(cfg))
                     {
-                        result = shutdown_view(view_rect, fa, gc);
-                        if (result != quit_action::NONE)
-                            run = false;
+                        if (dimmed)
+                        {
+                            if (current_playlist_needs_refresh)
+                            {
+                                refresh_current_playlist(cpl, cpv, mpdc);
+                                // TODO clear search_view
+                                current_playlist_needs_refresh = false;
+                            }
+                            // ignore one event, turn on lights
+                            dimmed = false;
+                            system(cfg.dim_idle_timer.undim_command.c_str());
+                            iti.sync();
+                            // TODO refactor into class
+                            SDL_AddTimer(std::chrono::milliseconds(cfg.dim_idle_timer.delay).count(), idle_timer_cb, &iti);
+                            // force a refresh by rebranding it - kind of hacky
+                            ev.type = user_event_type;
+                            ev.user.code = static_cast<int>(user_event::REFRESH);
+                        }
+                        else
+                        {
+                            iti.signal_user_activity();
+                            ctx.process_event(ev);
+                        }
                     }
                     else
                     {
-                        v_layout vl(6, 4, pad_box(view_rect, 4));
-                        auto top_box = vl.box(5);
-                        vl.next(5);
-
-                        unsigned int const item_skip = list_view_visible_items(top_box, fa_small);
-
-                        if (current_view == view_type::QUEUE)
-                        {
-
-                            h_layout hl(3, 4, vl.box());
-
-                            if (text_button(hl.box(), "Jump", fa, gc))
-                                cpl_view_pos = current_song_pos >= 5 && current_song_exists ? std::min(current_song_pos - 5, static_cast<unsigned int>(cpl.size() - item_skip)) : 0;
-                            hl.next();
-                            if (text_button(hl.box(), "▲", fa, gc))
-                                cpl_view_pos = dec_ensure_lower(cpl_view_pos - item_skip, cpl_view_pos, 0);
-                            hl.next();
-                            if (text_button(hl.box(), "▼", fa, gc))
-                                cpl_view_pos = inc_ensure_upper(cpl_view_pos + item_skip, cpl_view_pos, cpl.size() < item_skip ? 0 : cpl.size() - item_skip);
-
-                            int selection = list_view(top_box, cpl, cpl_view_pos, current_song_exists ? current_song_pos : -1, fa_small, gc);
-                            if (selection != -1)
-                                mpdc.play_position(selection);
-                        }
-                        else if (current_view == view_type::SONG_SEARCH)
-                        {
-                            if (present_search_results)
-                            {
-                                h_layout hl(3, 4, vl.box());
-                                if (text_button(hl.box(), "⌨", fa, gc))
-                                {
-                                    search_items.clear();
-                                    search_item_positions.clear();
-                                    search_term.clear();
-                                    present_search_results = false;
-
-                                    // necessary evil
-                                    push_user_event(user_event_type, user_event::REFRESH);
-                                }
-                                hl.next();
-                                if (text_button(hl.box(), "▲", fa, gc))
-                                    search_items_view_pos = dec_ensure_lower(search_items_view_pos - item_skip, search_items_view_pos, 0);
-                                hl.next();
-                                if (text_button(hl.box(), "▼", fa, gc))
-                                    search_items_view_pos = inc_ensure_upper(search_items_view_pos + item_skip, search_items_view_pos, search_items.size() < item_skip ? 0 : search_items.size() - item_skip);
-
-                                int selection = list_view(top_box, search_items, search_items_view_pos, -1, fa_small, gc);
-
-                                if (selection != -1)
-                                    mpdc.play_position(search_item_positions[selection]);
-                            }
-                            else
-                            {
-                                vec const & osk_size = cfg.on_screen_keyboard.size;
-                                char const * keys = cfg.on_screen_keyboard.keys.c_str();
-
-                                v_layout vl(osk_size.h, 4, pad_box(view_rect, 4));
-
-                                auto top_box = vl.box();
-
-                                vl.next();
-
-                                {
-                                    h_layout hl(osk_size.w, 4, vl.box());
-                                    for (int i = 0; i < osk_size.h * osk_size.w; ++i)
-                                    {
-                                        if (*keys == '\0')
-                                            break;
-                                        char buff[8];
-
-                                        int const num_bytes = fetch_utf8(buff, keys);
-
-                                        if (num_bytes == 0)
-                                            break;
-                                        else
-                                        {
-                                            if (text_button(hl.box(), buff, fa, gc))
-                                                search_term += buff;
-                                            hl.next();
-                                            keys += num_bytes;
-                                        }
-
-                                        if (i % osk_size.w == osk_size.w - 1)
-                                        {
-                                            vl.next();
-                                            hl.reset(vl.box());
-                                        }
-                                    }
-                                }
-
-                                // render controls (such that a redraw is not necessary)
-                                {
-                                    h_layout hl(osk_size.w, 4, top_box);
-                                    auto search_term_box = hl.box(osk_size.w - 2);
-
-                                    hl.next(osk_size.w - 2);
-
-                                    if (text_button(hl.box(), "⌫", fa, gc) && !search_term.empty())
-                                    {
-                                        int const len = count_utf8_backwards(search_term.c_str() + search_term.size() - 1);
-                                        search_term.resize(search_term.size() - len);
-                                    }
-                                    hl.next();
-                                    if (text_button(hl.box(), "⌧", fa, gc))
-                                        search_term.clear();
-
-                                    if (text_button(search_term_box, '\'' + search_term + '\'', fa, gc))
-                                    {
-                                        // do search
-                                        search_item_positions.clear();
-                                        for (std::size_t pos = 0; pos < cpl.size(); pos++)
-                                        {
-                                            auto const & s = cpl[pos];
-                                            if (icu::UnicodeString::fromUTF8(s).toLower().indexOf(icu::UnicodeString::fromUTF8(search_term)) != -1)
-                                            {
-                                                search_item_positions.push_back(pos);
-                                                search_items.push_back(s);
-                                            }
-                                        }
-
-                                        present_search_results = true;
-                                        search_items_view_pos = 0;
-
-                                        // necessary evil
-                                        push_user_event(user_event_type, user_event::REFRESH);
-                                    }
-
-                                }
-                            }
-                        }
+                        ctx.process_event(ev);
                     }
                 }
-                gc.present();
+
+
+                if (refresh_cover)
+                {
+                    cover_type ct;
+                    if (cfg.cover.directory.has_value())
+                    {
+                        auto opt_cover_path = find_cover_file(current_song_path, cfg.cover.directory.value(), cfg.cover.names, cfg.cover.extensions);
+
+                        if (opt_cover_path.has_value())
+                        {
+                            ct = cover_type::IMAGE;
+                            cv->set_cover(std::move(load_texture_from_image(renderer, opt_cover_path.value())));
+                        }
+                        else
+                        {
+                            ct = cover_type::SONG_INFO;
+                        }
+                    }
+                    else
+                    {
+                        ct = cover_type::SONG_INFO;
+                    }
+
+                    if (ct == cover_type::SONG_INFO)
+                    {
+                        cv->set_cover(mpdc.get_current_title(), mpdc.get_current_artist(), mpdc.get_current_album());
+                    }
+                    refresh_cover = false;
+
+                }
+
+                ctx.draw();
             }
         }
 
