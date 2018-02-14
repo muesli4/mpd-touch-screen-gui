@@ -131,21 +131,6 @@ std::pair<cover_type, unique_surface_ptr> create_cover(int w, int h, std::string
     }
 }
 
-//struct song
-//{
-//    song(std::string t, std::string ar, std::string al, std::string p)
-//        : title(t)
-//        , artist(ar)
-//        , album(al)
-//        , path(p)
-//    {
-//    }
-//    std::string title;
-//    std::string artist;
-//    std::string album;
-//    std::string path;
-//};
-
 void handle_cover_swipe_action(swipe_action a, mpd_control & mpdc, unsigned int volume_step)
 {
     switch (a)
@@ -238,6 +223,27 @@ bool idle_timer_enabled(program_config const & cfg)
 {
     return cfg.dim_idle_timer.delay.count() != 0;
 }
+
+/*
+widget_ptr shutdown_view(quit_action & result, bool & quit)
+{
+    return vbox({ std::make_shared<button>("Shutdown", [&](){ result = quit_action::SHUTDOWN; quit = true; })
+                , std::make_shared<button>("Reboot", [&](){ result = quit_action::REBOOT; quit = true; })
+                });
+}
+*/
+
+/*
+widget_ptr queue_view(std::vector<std::string> const & values, std::function<void()> activate_callback, int & current_song_pos)
+{
+    auto lv = std::make_shared<list_view(values, 0, activate_callback);
+
+    return vbox({ lv , hbox({ std::make_shared<button>("Jump", [=, &current_song_pos](){ lv.set_position(current_song_pos); })
+                            , std::make_shared<button>("▲", [=, &current_song_pos](){}) // TODO
+                            , std::make_shared<button>("▼", [=, &current_song_pos](){}) // TODO
+                            }) })
+}
+*/
 
 quit_action program(program_config const & cfg)
 {

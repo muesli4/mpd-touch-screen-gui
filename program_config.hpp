@@ -6,12 +6,7 @@
 #include <optional>
 #include <chrono>
 
-// TODO to be replaced
-struct vec
-{
-    int w;
-    int h;
-};
+#include <libwtk-sdl2/geometry.hpp>
 
 struct display_config
 {
