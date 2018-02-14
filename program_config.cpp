@@ -99,8 +99,12 @@ bool parse_cover_config(libconfig::Setting & s, cover_config & result)
 
 bool parse_on_screen_keyboard_config(libconfig::Setting & s, on_screen_keyboard_config & result)
 {
-    return parse_vec(s.lookup("size"), result.size)
-        && s.lookupValue("keys", result.keys);
+    bool ret = parse_vec(s.lookup("size"), result.size)
+               && s.lookupValue("keys", result.keys);
+
+    // ensure key limits
+    result.size.w = std::max(3, result.size.w);
+    return ret;
 }
 
 bool parse_program_config(boost::filesystem::path config_path, program_config & result)
