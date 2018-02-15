@@ -7,7 +7,7 @@ keypad::keypad(vec size, std::string keys, std::function<void(std::string)> subm
 }
 
 keypad::keypad(vec size, std::tuple<std::shared_ptr<button>, std::vector<table::entry>> tmp)
-    : embedded_widget<table>(size, std::get<1>(tmp), 5)
+    : embedded_widget<table>(vec{ std::max(size.w, 3), std::max(size.h, 0) + 1 }, std::get<1>(tmp), 5)
     , _submit_button(std::get<0>(tmp))
 {
 }
@@ -60,7 +60,7 @@ std::tuple<std::shared_ptr<button>, std::vector<table::entry>> keypad::construct
         });
     table_entries.push_back(
         { { size.w - 1, 0, 1, 1}
-        , std::make_shared<button>("⌫", [this]{ clear(); })
+        , std::make_shared<button>("⌧", [this]{ clear(); })
         });
 
     {
