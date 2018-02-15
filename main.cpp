@@ -172,9 +172,9 @@ bool idle_timer_enabled(program_config const & cfg)
 
 widget_ptr make_shutdown_view(quit_action & result, bool & run)
 {
-    return vbox({ { false, std::make_shared<button>("Shutdown", [&run, &result](){ result = quit_action::SHUTDOWN; run = false; }) }
+    return pad(10, vbox({ { false, std::make_shared<button>("Shutdown", [&run, &result](){ result = quit_action::SHUTDOWN; run = false; }) }
                 , { false, std::make_shared<button>("Reboot", [&run, &result](){ result = quit_action::REBOOT; run = false; }) }
-                });
+                }, 5, true));
 }
 
 std::string random_label(bool random)
@@ -238,8 +238,11 @@ quit_action program(program_config const & cfg)
         unsigned int cpv;
         bool current_playlist_needs_refresh = false;
 
-        // TODO check for error?
         uint32_t const user_event_type = SDL_RegisterEvents(1);
+        if (user_event_type == static_cast<uint32_t>(-1))
+        {
+            throw std::runtime_error("out of SDL user events");
+        }
         idle_timer_info iti(user_event_type);
 
         bool dimmed = false;
@@ -295,9 +298,11 @@ quit_action program(program_config const & cfg)
                                                    , std::make_shared<search_view>(cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); })
                                                    , make_shutdown_view(result, run)
                                                    });
+
+        // TODO introduce image button and add symbols from, e.g.: https://material.io/icons/
         auto button_controls = vbox(
                 { { false, std::make_shared<button>("♫", [&](){ current_view = cycle_view_type(current_view); view_box->set_page(static_cast<int>(current_view));  }) }
-                , { false, std::make_shared<button>("►", [&](){ mpdc.toggle_pause(); }) }
+                , { false, std::make_shared<button>("►", [&](){ mpdc.toggle_pause(); }) } // choose one of "❚❚"  "▍▍""▋▋"
                 , { false, random_button }
                 }, 5);
 
@@ -306,14 +311,7 @@ quit_action program(program_config const & cfg)
                          , { true, pad(5, view_box) }
                          }, 0, false);
 
-        //button main_widget("button", [](){ std::cout << "test" << std::endl; });
-        //keypad main_widget({ 7, 5 }, std::string("abcdefghijklmnopqrstuvwxyzäöü "), [&](std::string str){ std::cout << str << std::endl; });
-
-    //keypad(vec size, std::string keys, std::function<void(std::string)> submit_callback);
-
-        // TODO for debugging only
-        SDL_Renderer * renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
-        //SDL_Renderer * renderer = renderer_from_window(window);
+        SDL_Renderer * renderer = renderer_from_window(window);
         widget_context ctx(renderer, { cfg.font_path, 15 }, main_widget);
         ctx.draw();
 
