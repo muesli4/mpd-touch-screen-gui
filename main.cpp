@@ -46,10 +46,6 @@
 //                  over everything, remove the popup with a timer by simply sending a refresh event
 //                  (may use a specialized popup widget for that!)
 
-// determines the minimum length of a swipe
-unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
-unsigned int const SWIPE_THRESHOLD_LOW_Y = SWIPE_THRESHOLD_LOW_X;
-
 // the time to wait after a swipe, before allowing touch events
 std::chrono::milliseconds const SWIPE_WAIT_DEBOUNCE_THRESHOLD(400);
 
