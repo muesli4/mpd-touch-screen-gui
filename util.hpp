@@ -18,19 +18,4 @@ std::string absolute_cover_path(std::string base_dir, std::string rel_song_dir_p
 
 std::string string_from_ptr(char const * const ptr);
 
-int utf8_byte_count(uint8_t start_byte);
-
-// get the current utf8 character, write it into the buffer and return its length
-int fetch_utf8(char * buff, char const * ptr);
-
-bool is_utf8_following_byte(uint8_t b);
-
-// assumes a non-empty and well-formed utf8 string
-int count_utf8_backwards(char const * ptr);
-
-// check overflow and ensure at most upper_bound
-unsigned int inc_ensure_upper(unsigned int new_pos, unsigned int old_pos, unsigned int upper_bound);
-
-// check underflow and ensure at least lower_bound
-unsigned int dec_ensure_lower(unsigned int new_pos, unsigned int old_pos, unsigned int lower_bound);
 #endif

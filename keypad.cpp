@@ -1,5 +1,6 @@
-#include "keypad.hpp"
+#include <libwtk-sdl2/utf8.hpp>
 #include "util.hpp"
+#include "keypad.hpp"
 
 keypad::keypad(vec size, std::string keys, std::function<void(std::string)> submit_callback)
     : keypad(size, construct(size, keys, submit_callback))

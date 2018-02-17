@@ -1,45 +1,34 @@
-// poor mans mpd cover display (used for ILI9341 320x240 pixel display)
-
-#include <iostream>
+#include <array>
+#include <chrono>
+#include <condition_variable>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
-#include <queue>
-#include <array>
-
+#include <iostream>
 #include <iterator>
-
-#include <thread>
 #include <mutex>
-#include <condition_variable>
-#include <chrono>
-
-#include <cstdlib>
-
-#include <boost/filesystem.hpp>
+#include <queue>
+#include <thread>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
-
-#include "mpd_control.hpp"
-#include "program_config.hpp"
-#include "idle_timer.hpp"
-#include "user_event.hpp"
-
-//#include "util.hpp"
-//#include "sdl_util.hpp"
-//#include "font_atlas.hpp"
-//#include "gui.hpp"
-
-#include <libwtk-sdl2/widget.hpp>
-#include <libwtk-sdl2/button.hpp>
+#include <boost/filesystem.hpp>
 #include <libwtk-sdl2/box.hpp>
+#include <libwtk-sdl2/button.hpp>
 #include <libwtk-sdl2/list_view.hpp>
 #include <libwtk-sdl2/notebook.hpp>
-#include <libwtk-sdl2/widget_context.hpp>
 #include <libwtk-sdl2/padding.hpp>
 #include <libwtk-sdl2/sdl_util.hpp>
 #include <libwtk-sdl2/util.hpp>
+#include <libwtk-sdl2/widget.hpp>
+#include <libwtk-sdl2/widget_context.hpp>
+
+#include "idle_timer.hpp"
+#include "mpd_control.hpp"
+#include "program_config.hpp"
+#include "user_event.hpp"
+#include "util.hpp"
 
 #include "cover_view.hpp"
 #include "search_view.hpp"
@@ -50,12 +39,12 @@
 // TODO replace cycling with a menu
 // TODO playlist view: use several tags and display in different cells:
 //          - use a header colum (expand when clicked)
-//          - scroll with swipe
+//          - scroll horizontally with swipe
 // TODO playlist view: jump to song position on new song
-// TODO move constants into config
 // TODO cover view: show a popup when an action has been executed (use timer to refresh)
 //                  this may also be used for a remote control, if a popup exists draw it
 //                  over everything, remove the popup with a timer by simply sending a refresh event
+//                  (may use a specialized popup widget for that!)
 
 // determines the minimum length of a swipe
 unsigned int const SWIPE_THRESHOLD_LOW_X = 30;
@@ -104,19 +93,6 @@ void handle_cover_swipe_action(swipe_action a, mpd_control & mpdc, unsigned int 
         default:
             break;
     }
-}
-
-enum class view_type
-{
-    COVER_SWIPE,
-    QUEUE,
-    SONG_SEARCH,
-    SHUTDOWN
-};
-
-view_type cycle_view_type(view_type v)
-{
-    return static_cast<view_type>((static_cast<unsigned int>(v) + 1) % 4);
 }
 
 enum quit_action
@@ -171,9 +147,9 @@ bool idle_timer_enabled(program_config const & cfg)
 
 widget_ptr make_shutdown_view(quit_action & result, bool & run)
 {
-    return pad(5, vbox({ { false, std::make_shared<button>("Shutdown", [&run, &result](){ result = quit_action::SHUTDOWN; run = false; }) }
-                       , { false, std::make_shared<button>("Reboot", [&run, &result](){ result = quit_action::REBOOT; run = false; }) }
-                         }, 5, true));
+    return vbox({ { false, std::make_shared<button>("Shutdown", [&run, &result](){ result = quit_action::SHUTDOWN; run = false; }) }
+                , { false, std::make_shared<button>("Reboot", [&run, &result](){ result = quit_action::REBOOT; run = false; }) }
+                }, 5, true);
 }
 
 std::string random_label(bool random)
@@ -358,6 +334,9 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                             slv->set_position(0);
                             sv->on_playlist_changed();
                         }
+                        break;
+                    case user_event::RANDOM_CHANGED:
+                        random_button->set_label(random_label(random));
                         break;
                     case user_event::TIMER_EXPIRED:
                         dimmed = true;
