@@ -38,3 +38,11 @@ void search_view::on_back()
 {
     _embedded_widget.set_page(0);
 }
+
+
+void search_view::on_playlist_changed()
+{
+    _list_view->set_position(0);
+    on_back();
+}
+
