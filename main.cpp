@@ -46,9 +46,6 @@
 //                  over everything, remove the popup with a timer by simply sending a refresh event
 //                  (may use a specialized popup widget for that!)
 
-// the time to wait after a swipe, before allowing touch events
-std::chrono::milliseconds const SWIPE_WAIT_DEBOUNCE_THRESHOLD(400);
-
 // determines how long a swipe is still recognized as a touch
 unsigned int const TOUCH_DISTANCE_THRESHOLD_HIGH = 10;
 
