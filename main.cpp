@@ -171,9 +171,9 @@ bool idle_timer_enabled(program_config const & cfg)
 
 widget_ptr make_shutdown_view(quit_action & result, bool & run)
 {
-    return pad(10, vbox({ { false, std::make_shared<button>("Shutdown", [&run, &result](){ result = quit_action::SHUTDOWN; run = false; }) }
-                , { false, std::make_shared<button>("Reboot", [&run, &result](){ result = quit_action::REBOOT; run = false; }) }
-                }, 5, true));
+    return pad(5, vbox({ { false, std::make_shared<button>("Shutdown", [&run, &result](){ result = quit_action::SHUTDOWN; run = false; }) }
+                       , { false, std::make_shared<button>("Reboot", [&run, &result](){ result = quit_action::REBOOT; run = false; }) }
+                         }, 5, true));
 }
 
 std::string random_label(bool random)
@@ -234,25 +234,24 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
 
     // loop state
     std::string current_song_path;
-    bool current_song_exists;
 
     bool random;
-    view_type current_view = view_type::COVER_SWIPE;
-
-    bool refresh_cover = true;
 
     unsigned int current_song_pos = 0;
     std::vector<std::string> cpl;
     unsigned int cpv;
+
+    bool refresh_cover = true;
     bool current_playlist_needs_refresh = false;
 
+    // Set up user events.
     uint32_t const user_event_type = SDL_RegisterEvents(1);
     if (user_event_type == static_cast<uint32_t>(-1))
     {
         throw std::runtime_error("out of SDL user events");
     }
-    idle_timer_info iti(user_event_type);
 
+    idle_timer_info iti(user_event_type);
     bool dimmed = false;
 
     // timer is enabled
@@ -300,24 +299,30 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
 
     auto cv = std::make_shared<cover_view>([&](swipe_action a){ handle_cover_swipe_action(a, mpdc, 5); }, [&](){ mpdc.toggle_pause(); });
     auto slv = std::make_shared<list_view>(cpl, current_song_pos, [&mpdc](std::size_t pos){ mpdc.play_position(pos); });
+    auto sv = std::make_shared<search_view>(cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); });
 
-    auto view_box = std::make_shared<notebook>(std::vector<widget_ptr>{ cv
-                                                , song_list_view(slv, "Jump", [=, &current_song_pos](){ slv->set_position(current_song_pos); })
-                                                , std::make_shared<search_view>(cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); })
-                                                , make_shutdown_view(result, run)
-                                                });
+    auto view_box = std::make_shared<notebook>(
+        std::vector<widget_ptr>{ cv
+                               , song_list_view(slv, "Jump", [=, &current_song_pos](){ slv->set_position(current_song_pos); })
+                               , sv
+                               , make_shutdown_view(result, run)
+                               });
 
     // TODO introduce image button and add symbols from, e.g.: https://material.io/icons/
     auto button_controls = vbox(
-            { { false, std::make_shared<button>("♫", [&](){ current_view = cycle_view_type(current_view); view_box->set_page(static_cast<int>(current_view));  }) }
+            { { false, std::make_shared<button>("♫", [&](){ view_box->set_page((view_box->get_page() + 1) % 4);  }) }
             , { false, std::make_shared<button>("►", [&](){ mpdc.toggle_pause(); }) } // choose one of "❚❚"  "▍▍""▋▋"
             , { false, random_button }
             }, 5);
 
-    box main_widget(box::orientation::HORIZONTAL
-                    , { { false, pad(5, button_controls) }
-                        , { true, pad(5, view_box) }
-                        }, 0, false);
+    box main_widget
+        ( box::orientation::HORIZONTAL
+        , { { false, pad(5, button_controls) }
+          , { true, pad(5, view_box) }
+          }
+        , 0
+        , false
+        );
 
     widget_context ctx(renderer, { cfg.font_path, 15 }, main_widget);
     ctx.draw();
@@ -349,7 +354,9 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                         else
                         {
                             refresh_current_playlist(cpl, cpv, mpdc);
-                            // TODO clear search_view
+
+                            slv->set_position(0);
+                            sv->on_playlist_changed();
                         }
                         break;
                     case user_event::TIMER_EXPIRED:
@@ -373,8 +380,10 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                         if (current_playlist_needs_refresh)
                         {
                             refresh_current_playlist(cpl, cpv, mpdc);
-                            // TODO clear search_view
                             current_playlist_needs_refresh = false;
+
+                            slv->set_position(0);
+                            sv->on_playlist_changed();
                         }
                         // ignore one event, turn on lights
                         dimmed = false;
@@ -426,7 +435,6 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                     cv->set_cover(mpdc.get_current_title(), mpdc.get_current_artist(), mpdc.get_current_album());
                 }
                 refresh_cover = false;
-
             }
 
             ctx.draw();
@@ -441,7 +449,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
 
 SDL_Window * create_window_with_config(display_config const & cfg)
 {
-    // determine screen size of display 0
+    // Determine screen size of first display.
     SDL_DisplayMode mode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
     if (SDL_GetDisplayMode(0, 0, &mode) != 0)
         return nullptr;
@@ -454,7 +462,7 @@ SDL_Window * create_window_with_config(display_config const & cfg)
     }
 
     return SDL_CreateWindow
-        ( "mpc-touch-lcd-gui"
+        ( "mpc-touch-screen-gui"
         , SDL_WINDOWPOS_UNDEFINED
         , SDL_WINDOWPOS_UNDEFINED
         , mode.w
@@ -463,9 +471,10 @@ SDL_Window * create_window_with_config(display_config const & cfg)
         );
 }
 
-// Initialize important libraries and then start the SDL2 event loop.
 quit_action program(program_config const & cfg)
 {
+    // Initialize important libraries and then start the SDL2 event loop.
+
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS
                             | (idle_timer_enabled(cfg) ? SDL_INIT_TIMER : 0)
             );
@@ -488,7 +497,16 @@ quit_action program(program_config const & cfg)
 
     SDL_Renderer * renderer = renderer_from_window(window);
 
-    quit_action result = event_loop(renderer, cfg);
+    quit_action result = quit_action::NONE;
+
+    try
+    {
+         result = event_loop(renderer, cfg);
+    }
+    catch (std::exception const & e)
+    {
+        std::cerr << e.what() << std::endl;
+    }
 
     TTF_Quit();
 
