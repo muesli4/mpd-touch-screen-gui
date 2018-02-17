@@ -10,7 +10,6 @@
 
 struct display_config
 {
-
     bool fullscreen;
     vec resolution;
 };
