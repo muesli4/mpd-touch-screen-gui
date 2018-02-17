@@ -19,19 +19,7 @@ playlist_change_info::playlist_change_info(int nv, playlist_change_info::diff_ty
 {
 }
 
-song_change_info::song_change_info()
-    : valid(false)
-{
-}
-
-song_change_info::song_change_info(std::string path, unsigned int pos)
-    : valid(true)
-    , path(path)
-    , pos(pos)
-{
-}
-
-mpd_control::mpd_control(std::function<void(song_change_info)> new_song_cb, std::function<void(bool)> random_cb, std::function<void()> playlist_changed_cb)
+mpd_control::mpd_control(std::function<void(std::optional<song_location>)> new_song_cb, std::function<void(bool)> random_cb, std::function<void()> playlist_changed_cb)
     : _c(mpd_connection_new(nullptr, 0, 0))
     , _run(true)
     , _new_song_cb(new_song_cb)
@@ -319,5 +307,5 @@ void mpd_control::add_external_task(std::function<void(mpd_connection *)> t)
 
 void mpd_control::new_song_cb(mpd_song * s)
 {
-    _new_song_cb(s != nullptr ? song_change_info(mpd_song_get_uri(s), mpd_song_get_pos(s)) : song_change_info());
+    _new_song_cb(s != nullptr ? std::make_optional(song_location{ mpd_song_get_uri(s), mpd_song_get_pos(s) }) : std::nullopt);
 }

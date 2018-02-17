@@ -5,6 +5,7 @@
 #include <mutex>
 #include <queue>
 #include <future>
+#include <optional>
 
 #include <mpd/client.h>
 
@@ -21,18 +22,23 @@ struct playlist_change_info
     unsigned int new_length;
 };
 
-struct song_change_info
+struct song_location
 {
-    song_change_info();
-    song_change_info(std::string path, unsigned int pos);
-    bool valid;
     std::string path;
     unsigned int pos;
 };
 
+struct status_info
+{
+};
+
 struct mpd_control
 {
-    mpd_control(std::function<void(song_change_info)> new_song_cb, std::function<void(bool)> random_cb, std::function<void()> playlist_changed_cb);
+    mpd_control
+        ( std::function<void(std::optional<song_location>)> new_song_cb
+        , std::function<void(bool)> random_cb
+        , std::function<void()> playlist_changed_cb
+        );
     ~mpd_control();
 
     void run();
@@ -81,7 +87,7 @@ struct mpd_control
 
     bool _run;
 
-    std::function<void(song_change_info)> _new_song_cb;
+    std::function<void(std::optional<song_location>)> _new_song_cb;
     std::function<void(bool)> _random_cb;
     std::function<void()> _playlist_changed_cb;
 

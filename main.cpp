@@ -67,7 +67,6 @@ std::chrono::milliseconds const SWIPE_WAIT_DEBOUNCE_THRESHOLD(400);
 // determines how long a swipe is still recognized as a touch
 unsigned int const TOUCH_DISTANCE_THRESHOLD_HIGH = 10;
 
-
 std::optional<std::string> find_cover_file(std::string rel_song_dir_path, std::string base_dir, std::vector<std::string> names, std::vector<std::string> extensions)
 {
     std::string const abs_cover_dir = absolute_cover_path(base_dir, basename(rel_song_dir_path));
@@ -182,6 +181,26 @@ std::string random_label(bool random)
     return random ? "¬R" : "R";
 }
 
+// Types of events that come from a model.
+enum class model_event_type
+{
+    PLAYLIST,
+    SONG_LOCATION,
+    PLAYBACK_STATUS
+};
+
+struct model_event_handler
+{
+    typedef std::function<void(playlist_change_info)> playback_status_function;
+    typedef std::function<void(std::optional<song_location>)> song_location_function;
+    typedef std::function<void(status_info)> status_function;
+
+
+    void process(model_event_type met);
+
+
+};
+
 quit_action program(program_config const & cfg)
 {
     quit_action result = quit_action::NONE;
@@ -255,16 +274,16 @@ quit_action program(program_config const & cfg)
         }
 
         mpd_control mpdc(
-            [&](song_change_info sci)
+            [&](std::optional<song_location> opt_sl)
             {
                 // TODO probably move, as string copy might not be atomic
                 //      another idea is to completely move all song information
                 //      into the main thread
-                current_song_exists = sci.valid;
-                if (sci.valid)
+                if (opt_sl.has_value())
                 {
-                    current_song_path = sci.path;
-                    current_song_pos = sci.pos;
+                    auto const & sl = opt_sl.value();
+                    current_song_path = sl.path;
+                    current_song_pos = sl.pos;
                 }
                 push_user_event(user_event_type, user_event::SONG_CHANGED);
             },
@@ -314,6 +333,7 @@ quit_action program(program_config const & cfg)
         SDL_Renderer * renderer = renderer_from_window(window);
         widget_context ctx(renderer, { cfg.font_path, 15 }, main_widget);
         ctx.draw();
+
 
         while (run && SDL_WaitEvent(&ev) == 1)
         {
