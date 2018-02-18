@@ -67,20 +67,20 @@ std::optional<std::string> find_cover_file(std::string rel_song_dir_path, std::s
     return std::nullopt;
 }
 
-void handle_cover_swipe_action(swipe_action a, mpd_control & mpdc, unsigned int volume_step)
+void handle_cover_swipe_direction(swipe_direction dir, mpd_control & mpdc, unsigned int volume_step)
 {
-    switch (a)
+    switch (dir)
     {
-        case swipe_action::UP:
+        case swipe_direction::UP:
             mpdc.inc_volume(volume_step);
             break;
-        case swipe_action::DOWN:
+        case swipe_direction::DOWN:
             mpdc.dec_volume(volume_step);
             break;
-        case swipe_action::RIGHT:
+        case swipe_direction::RIGHT:
             mpdc.next_song();
             break;
-        case swipe_action::LEFT:
+        case swipe_direction::LEFT:
             mpdc.prev_song();
             break;
         default:
@@ -266,7 +266,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     // TODO move to MVC
     auto random_button = std::make_shared<button>(random_label(random), [&](){ mpdc.set_random(!random); });
 
-    auto cv = std::make_shared<cover_view>([&](swipe_action a){ handle_cover_swipe_action(a, mpdc, 5); }, [&](){ mpdc.toggle_pause(); });
+    auto cv = std::make_shared<cover_view>([&](swipe_direction dir){ handle_cover_swipe_direction(dir, mpdc, 5); }, [&](){ mpdc.toggle_pause(); });
     auto slv = std::make_shared<list_view>(cpl, current_song_pos, [&mpdc](std::size_t pos){ mpdc.play_position(pos); });
     auto sv = std::make_shared<search_view>(cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); });
 

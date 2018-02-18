@@ -1,12 +1,12 @@
 
 #include "cover_view.hpp"
 
-cover_view::cover_view(std::function<void(swipe_action)> swipe_callback, std::function<void()> press_callback)
+cover_view::cover_view(std::function<void(swipe_direction)> swipe_callback, std::function<void()> press_callback)
     : cover_view(std::make_shared<label>(""), std::make_shared<texture_view>(), swipe_callback, press_callback)
 {
 }
 
-cover_view::cover_view(std::shared_ptr<label> l, std::shared_ptr<texture_view> tv, std::function<void(swipe_action)> swipe_callback, std::function<void()> press_callback)
+cover_view::cover_view(std::shared_ptr<label> l, std::shared_ptr<texture_view> tv, std::function<void(swipe_direction)> swipe_callback, std::function<void()> press_callback)
     : embedded_widget<notebook>(std::vector<widget_ptr>{ l, tv })
     , _label(l)
     , _texture_view(tv)
