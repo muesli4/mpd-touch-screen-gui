@@ -9,7 +9,10 @@
 
 #include <mpd/client.h>
 
+#if defined(HAVE_POLL_H) && defined(HAVE_SYS_EVENTFD_H) && defined(HAVE_UNISTD_H)
+#pragma message ( "Compiling with eventfd polling support." )
 #define USE_POLL
+#endif
 
 struct playlist_change_info
 {

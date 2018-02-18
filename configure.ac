@@ -22,8 +22,9 @@ AX_BOOST_BASE([1.35.0],,[AC_MSG_ERROR([boost was not found])])
 AX_BOOST_FILESYSTEM
 AX_BOOST_SYSTEM
 
+AC_CHECK_HEADERS([sys/eventfd.h unistd.h poll.h], [], [])
 
-# TODO is there a better way to add support the thread header?
+# TODO is there a better way to add support the C++ thread header?
 AX_PTHREAD
 
 
