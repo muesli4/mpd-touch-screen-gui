@@ -1,0 +1,17 @@
+*.o
+*.in
+Makefile
+Makefile.in
+PKGBUILD
+aclocal.m4
+autom4te.cache/
+compile
+config.guess
+config.log
+config.status
+config.sub
+configure
+debug_log
+depcomp
+install-sh
+missing
