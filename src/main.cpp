@@ -14,6 +14,7 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 #include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <libwtk-sdl2/box.hpp>
 #include <libwtk-sdl2/button.hpp>
 #include <libwtk-sdl2/list_view.hpp>
@@ -33,7 +34,6 @@
 #include "cover_view.hpp"
 #include "search_view.hpp"
 #include "song_list_view.hpp"
-
 
 // future feature list and ideas:
 // TODO replace cycling with a menu
@@ -490,33 +490,79 @@ quit_action program(program_config const & cfg)
 
 int main(int argc, char * argv[])
 {
+    std::cout << PACKAGE_NAME << ' ' << VERSION << std::endl;
+
     quit_action quit_action = quit_action::NONE;
 
-    char const * shutdown_command;
-    char const * reboot_command;
+    char const * shutdown_command = "echo";
+    char const * reboot_command = "echo";
 
     // Search for a configuration file and launch the program.
     {
-        bool found = false;
-        program_config cfg;
-        for (auto const & cfg_dir : get_config_directories())
-        {
-            auto cfg_path = cfg_dir / "mpd-touch-screen-gui.conf";
+        auto const & cfg_dirs = get_config_directories();
 
-            if (boost::filesystem::exists(cfg_path) && parse_program_config(cfg_path, cfg))
+        if (cfg_dirs.empty())
+        {
+            std::cerr << "Unable to find configuration directory." << std::endl;
+            return 1;
+        }
+        else
+        {
+            using namespace std;
+            using namespace boost::filesystem;
+
+            auto const cfg_name = "mpd-touch-screen-gui.conf";
+
+            optional<path> opt_cfg_path;
+
+            for (auto const & cfg_dir : cfg_dirs)
             {
-                found = true;
+                auto tmp_path = cfg_dir / cfg_name;
+
+                if (exists(tmp_path))
+                {
+                    cout << "Found configuration file: " << tmp_path.c_str() << endl;
+                    opt_cfg_path = tmp_path;
+                    break;
+                }
+            }
+
+            path cfg_path;
+            if (opt_cfg_path.has_value())
+            {
+                cfg_path = opt_cfg_path.value();
+            }
+            else
+            {
+                // Copy the default configuration to the best path.
+                cfg_path = cfg_dirs.front() / cfg_name;
+                boost::system::error_code ec;
+                copy(path(PKGDATA) / cfg_name, cfg_path, ec);
+                if (ec != boost::system::errc::success)
+                {
+                    cerr << "Failed to create configuration file: " << ec.message() << endl;
+                    return 1;
+                }
+                else
+                {
+
+                    cout << "Created configuration file: " << cfg_path.c_str() << endl;
+                }
+            }
+
+            program_config cfg;
+            if (parse_program_config(cfg_path, cfg))
+            {
                 quit_action = program(cfg);
                 shutdown_command = cfg.system_control.shutdown_command.c_str();
                 reboot_command = cfg.system_control.reboot_command.c_str();
-                break;
             }
-        }
+            else
+            {
+                cerr << "Failed to parse configuration file." << endl;
+                return 1;
+            }
 
-        if (!found)
-        {
-            std::cerr << "Failed to parse configuration file." << std::endl;
-            return 1;
         }
     }
 

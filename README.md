@@ -1,12 +1,14 @@
 # Usage
 
-This the frontend GUI application for my DIY HiFi system and digital audio streaming solution (based on Raspberry Pi 2B and HifiBerry AMP+) showing on an IL9341 LCD including a touch screen (with 320x240 resolution). It allows controlling a running MPD instance. (See MPD environment variables if you don't intend to run it on the same machine.)
+This the frontend GUI application for my DIY HiFi system and digital audio streaming solution (based on Raspberry Pi 2B and HifiBerry AMP+) showing on an IL9341 LCD including a touch screen (with 320x240 resolution). It allows controlling a running MPD instance.
 
 As the display lacks any hardware acceleration and is run from the framebuffer, the draw operations are largely reduced. I.e. there is no periodic rendering. The screen is updated when necessary.
 
 ## Configuration
 
-The repository ships with a default configuration file (place it in your config folder, usually `$HOME/.config`, or with the executable). All of the settings are pretty self-explanatory.
+On the first run the program will install the default configuration file (usually in `$HOME/.config/mpd-touch-screen-gui.conf`).
+
+If you don't intend to run it on the same machine, you should set the MPD environment variables (i.e. `MPD_HOST`).
 
 # Features
 
@@ -34,11 +36,20 @@ The repository ships with a default configuration file (place it in your config 
 * icu-uc
 * boost_filesystem
 * boost_system
+* libwtk-sdl2
 * C++17
+
+# Installation
+
+*mpd-touch-screen-gui* uses autotools as build system:
+* `autoreconf --install`
+* `./configure`
+* `make`
+* `make install`
 
 # State
 
-Still experimental but pretty functional overall. I used a quick and dirty implementation of an IMGUI library (mostly for rapid development and learning purposes) which will be replaced soon. Sit tight for improvements and extended functionality (e.g., control all of the UI with an infa-red remote control).
+I have been using it for a while now and it has been very stable. However, I'm currently trying to improve the UI and add IRC remote control support for navigation.
 
 # Contact
 

@@ -1,4 +1,8 @@
 AC_INIT([mpd-touch-screen-gui], [0.0.1], [muesli4@gmail.com])
+
+#AC_CONFIG_SRCDIR([src/config.h.in])
+#AC_CONFIG_HEADER(src/config.h)
+
 AC_CONFIG_MACRO_DIRS([m4])
 AM_INIT_AUTOMAKE([-Wall foreign])
 
@@ -17,6 +21,7 @@ PKG_CHECK_MODULES(CONFIG, libconfig++)
 AX_BOOST_BASE([1.35.0],,[AC_MSG_ERROR([boost was not found])])
 AX_BOOST_FILESYSTEM
 AX_BOOST_SYSTEM
+
 
 # TODO is there a better way to add support the thread header?
 AX_PTHREAD
