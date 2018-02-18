@@ -103,34 +103,23 @@ bool parse_on_screen_keyboard_config(libconfig::Setting & s, on_screen_keyboard_
         && s.lookupValue("keys", result.keys);
 }
 
+bool parse_font(libconfig::Setting & s, font & result)
+{
+    return s.lookupValue("path", result.path)
+        && s.lookupValue("size", result.size);
+}
+
 bool parse_program_config(boost::filesystem::path config_path, program_config & result)
 {
     libconfig::Config config;
     config.readFile(config_path.c_str());
     libconfig::Setting & program_setting = config.lookup("program");
 
-    std::string tmp;
-    if (program_setting.lookupValue("font", tmp))
-    {
-        if (!tmp.empty())
-        {
-            if (tmp[0] == '/')
-            {
-                result.font_path = tmp;
-            }
-            else
-            {
-                result.font_path = "/usr/share/fonts/TTF/" + tmp + ".ttf";
-            }
-
-            return parse_display_config(program_setting.lookup("display"), result.display)
-                && parse_system_control_config(program_setting.lookup("system_control"), result.system_control)
-                && parse_dim_idle_timer_config(program_setting.lookup("dim_idle_timer"), result.dim_idle_timer)
-                && parse_swipe_config(program_setting.lookup("swipe"), result.swipe)
-                && parse_cover_config(program_setting.lookup("cover"), result.cover)
-                && parse_on_screen_keyboard_config(program_setting.lookup("on_screen_keyboard"), result.on_screen_keyboard);
-        }
-    }
-
-    return false;
+    return parse_font(program_setting.lookup("default_font"), result.default_font)
+        && parse_display_config(program_setting.lookup("display"), result.display)
+        && parse_system_control_config(program_setting.lookup("system_control"), result.system_control)
+        && parse_dim_idle_timer_config(program_setting.lookup("dim_idle_timer"), result.dim_idle_timer)
+        && parse_swipe_config(program_setting.lookup("swipe"), result.swipe)
+        && parse_cover_config(program_setting.lookup("cover"), result.cover)
+        && parse_on_screen_keyboard_config(program_setting.lookup("on_screen_keyboard"), result.on_screen_keyboard);
 }

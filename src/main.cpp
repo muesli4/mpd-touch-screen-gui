@@ -293,7 +293,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
         , false
         );
 
-    widget_context ctx(renderer, { cfg.font_path, 15 }, main_widget);
+    widget_context ctx(renderer, cfg.default_font, main_widget);
     ctx.draw();
 
 

@@ -7,6 +7,7 @@
 #include <chrono>
 
 #include <libwtk-sdl2/geometry.hpp>
+#include <libwtk-sdl2/font.hpp>
 
 struct display_config
 {
@@ -47,6 +48,8 @@ struct on_screen_keyboard_config
 
 struct program_config
 {
+    font default_font;
+
     std::string font_path;
     display_config display;
     system_control_config system_control;
