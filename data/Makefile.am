@@ -1,2 +1,2 @@
-pkgdata_DATA = mpd-touch-screen-gui.conf
+pkgdata_DATA = program.conf
 

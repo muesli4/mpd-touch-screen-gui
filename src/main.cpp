@@ -293,6 +293,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
         , false
         );
 
+    // TODO add dir_unambig_factor_threshold from config
     widget_context ctx(renderer, cfg.default_font, main_widget);
     ctx.draw();
 
@@ -511,13 +512,14 @@ int main(int argc, char * argv[])
             using namespace std;
             using namespace boost::filesystem;
 
-            auto const cfg_name = "mpd-touch-screen-gui.conf";
+            auto const cfg_name = "program.conf";
+            auto const cfg_rel_path = PACKAGE_NAME;
 
             optional<path> opt_cfg_path;
 
             for (auto const & cfg_dir : cfg_dirs)
             {
-                auto tmp_path = cfg_dir / cfg_name;
+                auto tmp_path = cfg_dir / cfg_rel_path / cfg_name;
 
                 if (exists(tmp_path))
                 {
@@ -534,9 +536,23 @@ int main(int argc, char * argv[])
             }
             else
             {
-                // Copy the default configuration to the best path.
-                cfg_path = cfg_dirs.front() / cfg_name;
                 boost::system::error_code ec;
+
+                // Copy the default configuration to the best path.
+                auto cfg_base_path = cfg_dirs.front() / cfg_rel_path;
+
+                if (create_directories(cfg_base_path, ec))
+                {
+                    cout << "Created directory: " << cfg_base_path.c_str() << endl;
+                }
+
+                if (ec != boost::system::errc::success)
+                {
+                    cerr << "Failed to create config directory: " << ec.message() << endl;
+                    return 1;
+                }
+
+                cfg_path = cfg_base_path / cfg_name;
                 copy(path(PKGDATA) / cfg_name, cfg_path, ec);
                 if (ec != boost::system::errc::success)
                 {
