@@ -54,10 +54,12 @@ bool parse_dim_idle_timer_config(libconfig::Setting & s, dim_idle_timer_config &
     return false;
 }
 
+/*
 bool parse_swipe_config(libconfig::Setting & s, swipe_config & result)
 {
     return s.lookupValue("dir_unambig_factor_threshold", result.dir_unambig_factor_threshold);
 }
+*/
 
 bool parse_cover_config(libconfig::Setting & s, cover_config & result)
 {
@@ -119,7 +121,7 @@ bool parse_program_config(boost::filesystem::path config_path, program_config & 
         && parse_display_config(program_setting.lookup("display"), result.display)
         && parse_system_control_config(program_setting.lookup("system_control"), result.system_control)
         && parse_dim_idle_timer_config(program_setting.lookup("dim_idle_timer"), result.dim_idle_timer)
-        && parse_swipe_config(program_setting.lookup("swipe"), result.swipe)
+        //&& parse_swipe_config(program_setting.lookup("swipe"), result.swipe)
         && parse_cover_config(program_setting.lookup("cover"), result.cover)
         && parse_on_screen_keyboard_config(program_setting.lookup("on_screen_keyboard"), result.on_screen_keyboard);
 }

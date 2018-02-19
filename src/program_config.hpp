@@ -28,10 +28,12 @@ struct dim_idle_timer_config
     std::chrono::seconds delay;
 };
 
+/*
 struct swipe_config
 {
     double dir_unambig_factor_threshold;
 };
+*/
 
 struct cover_config
 {
@@ -54,7 +56,7 @@ struct program_config
     display_config display;
     system_control_config system_control;
     dim_idle_timer_config dim_idle_timer;
-    swipe_config swipe;
+    //swipe_config swipe;
     cover_config cover;
     on_screen_keyboard_config on_screen_keyboard;
 };
