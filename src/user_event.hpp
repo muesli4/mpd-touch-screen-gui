@@ -16,6 +16,7 @@ enum class user_event
     ACTIVATE
 };
 
+// As SDL_PushEvent itself is thread safe, this class is too.
 struct user_event_sender
 {
     user_event_sender();
