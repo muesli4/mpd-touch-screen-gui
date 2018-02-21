@@ -6,7 +6,8 @@ As the display lacks any hardware acceleration and is run from the framebuffer, 
 
 ## Configuration
 
-On the first run the program will install the default configuration file (usually in `$HOME/.config/mpd-touch-screen-gui.conf`).
+On the first run the program will install the default configuration file (usually in `$HOME/.config/mpd-touch-screen-gui/program.conf` and `client.conf` for the client).
+
 
 If you don't intend to run it on the same machine, you should set the MPD environment variables (i.e. `MPD_HOST`).
 
@@ -17,6 +18,7 @@ If you don't intend to run it on the same machine, you should set the MPD enviro
 * A playlist view allows viewing and changing the song from the current playlist.
 * In the search view a on-screen keyboard is presented that allows to search for songs case-insensitive. The results may be browsed and played in the same manner as with the playlist view.
 * A final view allows shutting down and rebooting the machine.
+* A configurable UDP client allows basic UI controls (intended for use with an IR remote) in 6 directions (next and previous in x, y and natural order)
 
 ## Example images
 
@@ -36,6 +38,7 @@ If you don't intend to run it on the same machine, you should set the MPD enviro
 * icu-uc
 * boost_filesystem
 * boost_system
+* boost_asio
 * libwtk-sdl2
 * C++17
 
@@ -49,7 +52,7 @@ If you don't intend to run it on the same machine, you should set the MPD enviro
 
 # State
 
-I have been using it for a while now and it has been very stable. However, I'm currently trying to improve the UI and add IRC remote control support for navigation.
+I have been using it for a while now and it has been very stable. However, I'm currently trying to improve the UI and add IR remote control support for navigation.
 
 # Contact
 
