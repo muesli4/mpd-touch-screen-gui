@@ -334,11 +334,13 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                         system(cfg.dim_idle_timer.dim_command.c_str());
                         continue;
                     case user_event::ACTIVATE:
+                        ctx.activate();
                         break;
                     case user_event::NAVIGATION:
                         {
-                            navigation_type nt = static_cast<navigation_type>((uint64_t)ev.user.data1);
-                            // TODO 
+                            std::uintptr_t const p = reinterpret_cast<std::uintptr_t>(ev.user.data1);
+                            navigation_type const nt = static_cast<navigation_type>(p);
+                            ctx.navigate_selection(nt);
                         }
                         break;
                     default:

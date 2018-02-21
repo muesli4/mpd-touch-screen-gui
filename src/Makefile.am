@@ -4,7 +4,7 @@
 
 AM_CPPFLAGS = -DPKGDATA="\"$(pkgdatadir)\"" $(BOOST_CPPFLAGS)
 
-bin_PROGRAMS = mpd-touch-screen-gui
+bin_PROGRAMS = mpd-touch-screen-gui mpd-touch-screen-gui-send
 
 mpd_touch_screen_gui_SOURCES = \
 	cover_view.cpp               \
@@ -22,3 +22,8 @@ mpd_touch_screen_gui_LDADD = $(SDL2_LIBS) $(SDL2_IMG_LIBS) $(LIBWTK_SDL2_LIBS) $
 
 mpd_touch_screen_gui_CXXFLAGS = $(SDL2_CFLAGS) $(SDL2_IMG_CFLAGS) $(LIBWTK_SDL2_CFLAGS) $(MPD_CLIENT_CFLAGS) $(ICU_UC_CFLAGS) $(CONFIG_CFLAGS) $(PTHREAD_CFLAGS) @AM_CXXFLAGS@
 
+
+mpd_touch_screen_gui_send_SOURCES = send.cpp
+
+mpd_touch_screen_gui_send_LDADD = $(BOOST_SYSTEM_LIB) $(PTHREAD_LIBS) $(PTHREAD_CFLAGS)
+mpd_touch_screen_gui_send_CXXFLAGS = $(PTHREAD_CFLAGS)
