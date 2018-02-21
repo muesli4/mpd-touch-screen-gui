@@ -15,6 +15,7 @@
 #include <SDL2/SDL_ttf.h>
 #include <boost/filesystem.hpp>
 #include <boost/system/error_code.hpp>
+#include <libconfig.h++>
 #include <libwtk-sdl2/box.hpp>
 #include <libwtk-sdl2/button.hpp>
 #include <libwtk-sdl2/list_view.hpp>
@@ -295,7 +296,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
         );
 
     // TODO add dir_unambig_factor_threshold from config
-    widget_context ctx(renderer, cfg.default_font, main_widget);
+    widget_context ctx(renderer, { cfg.default_font, cfg.big_font }, main_widget);
     ctx.draw();
 
 
@@ -577,16 +578,23 @@ int main(int argc, char * argv[])
             }
 
             program_config cfg;
-            if (parse_program_config(cfg_path, cfg))
+            try
             {
-                quit_action = program(cfg);
-                shutdown_command = cfg.system_control.shutdown_command.c_str();
-                reboot_command = cfg.system_control.reboot_command.c_str();
+                if (parse_program_config(cfg_path, cfg))
+                {
+                    quit_action = program(cfg);
+                    shutdown_command = cfg.system_control.shutdown_command.c_str();
+                    reboot_command = cfg.system_control.reboot_command.c_str();
+                }
+                else
+                {
+                    cerr << "Failed to parse configuration file." << endl;
+                    return 1;
+                }
             }
-            else
+            catch (libconfig::SettingNotFoundException const & e)
             {
-                cerr << "Failed to parse configuration file." << endl;
-                return 1;
+                std::cerr << "Missing config path: " << e.getPath() << std::endl;
             }
 
         }

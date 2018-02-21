@@ -51,6 +51,7 @@ struct on_screen_keyboard_config
 struct program_config
 {
     font default_font;
+    font big_font;
 
     std::string font_path;
     display_config display;

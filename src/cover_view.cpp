@@ -48,6 +48,7 @@ void cover_view::set_cover(unique_texture_ptr texture_ptr)
 void cover_view::set_cover(std::string title, std::string artist, std::string album)
 {
     _embedded_widget.set_page(0);
-    _label->set_content({ paragraph(title, 1), paragraph(artist, 1), paragraph(album) });
+    // TODO make sure the font actually exists
+    _label->set_content({ paragraph(title, 1, 1), paragraph(artist, 1, 1), paragraph(album, 0, 1) });
 }
 

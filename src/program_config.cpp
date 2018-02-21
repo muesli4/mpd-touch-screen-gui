@@ -118,6 +118,7 @@ bool parse_program_config(boost::filesystem::path config_path, program_config & 
     libconfig::Setting & program_setting = config.lookup("program");
 
     return parse_font(program_setting.lookup("default_font"), result.default_font)
+        && parse_font(program_setting.lookup("big_font"), result.big_font)
         && parse_display_config(program_setting.lookup("display"), result.display)
         && parse_system_control_config(program_setting.lookup("system_control"), result.system_control)
         && parse_dim_idle_timer_config(program_setting.lookup("dim_idle_timer"), result.dim_idle_timer)
