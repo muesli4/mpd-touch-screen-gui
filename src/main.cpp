@@ -26,6 +26,7 @@
 #include <libwtk-sdl2/widget.hpp>
 #include <libwtk-sdl2/widget_context.hpp>
 
+#include "config_file.hpp"
 #include "idle_timer.hpp"
 #include "mpd_control.hpp"
 #include "program_config.hpp"
@@ -252,11 +253,16 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
             ues.push(user_event::PLAYLIST_CHANGED);
         }
     );
-
-    udp_control udp_control(6666, ues);
-
-    std::thread udp_thread(&udp_control::run, std::ref(udp_control));
     std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
+
+    std::optional<udp_control> opt_udp_control;
+    std::thread udp_thread;
+    if (cfg.opt_port.has_value())
+    {
+        opt_udp_control.emplace(cfg.opt_port.value(), ues);
+        std::thread t { &udp_control::run, std::ref(opt_udp_control.value()) };
+        udp_thread.swap(t);
+    }
 
     // get initial state from mpd
     std::tie(cpl, cpv) = mpdc.get_current_playlist();
@@ -393,9 +399,9 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
             if (refresh_cover)
             {
                 cover_type ct;
-                if (cfg.cover.directory.has_value())
+                if (cfg.cover.opt_directory.has_value())
                 {
-                    auto opt_cover_path = find_cover_file(current_song_path, cfg.cover.directory.value(), cfg.cover.names, cfg.cover.extensions);
+                    auto opt_cover_path = find_cover_file(current_song_path, cfg.cover.opt_directory.value(), cfg.cover.names, cfg.cover.extensions);
 
                     if (opt_cover_path.has_value())
                     {
@@ -425,8 +431,12 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
 
     mpdc.stop();
     mpdc_thread.join();
-    udp_control.stop();
-    udp_thread.join();
+
+    if (cfg.opt_port.has_value())
+    {
+        opt_udp_control.value().stop();
+        udp_thread.join();
+    }
 
     return result;
 }
@@ -521,80 +531,30 @@ int main(int argc, char * argv[])
         else
         {
             using namespace std;
-            using namespace boost::filesystem;
 
-            auto const cfg_name = "program.conf";
-            auto const cfg_rel_path = PACKAGE_NAME;
+            auto opt_cfg_path = find_or_create_config_file("program.conf");
 
-            optional<path> opt_cfg_path;
-
-            for (auto const & cfg_dir : cfg_dirs)
-            {
-                auto tmp_path = cfg_dir / cfg_rel_path / cfg_name;
-
-                if (exists(tmp_path))
-                {
-                    cout << "Found configuration file: " << tmp_path.c_str() << endl;
-                    opt_cfg_path = tmp_path;
-                    break;
-                }
-            }
-
-            path cfg_path;
             if (opt_cfg_path.has_value())
             {
-                cfg_path = opt_cfg_path.value();
-            }
-            else
-            {
-                boost::system::error_code ec;
-
-                // Copy the default configuration to the best path.
-                auto cfg_base_path = cfg_dirs.front() / cfg_rel_path;
-
-                if (create_directories(cfg_base_path, ec))
+                program_config cfg;
+                try
                 {
-                    cout << "Created directory: " << cfg_base_path.c_str() << endl;
+                    if (parse_program_config(opt_cfg_path.value(), cfg))
+                    {
+                        quit_action = program(cfg);
+                        shutdown_command = cfg.system_control.shutdown_command.c_str();
+                        reboot_command = cfg.system_control.reboot_command.c_str();
+                    }
+                    else
+                    {
+                        cerr << "Failed to parse configuration file." << endl;
+                        return 1;
+                    }
                 }
-
-                if (ec != boost::system::errc::success)
+                catch (libconfig::SettingNotFoundException const & e)
                 {
-                    cerr << "Failed to create config directory: " << ec.message() << endl;
-                    return 1;
+                    cerr << "Missing config path: " << e.getPath() << endl;
                 }
-
-                cfg_path = cfg_base_path / cfg_name;
-                copy(path(PKGDATA) / cfg_name, cfg_path, ec);
-                if (ec != boost::system::errc::success)
-                {
-                    cerr << "Failed to create configuration file: " << ec.message() << endl;
-                    return 1;
-                }
-                else
-                {
-
-                    cout << "Created configuration file: " << cfg_path.c_str() << endl;
-                }
-            }
-
-            program_config cfg;
-            try
-            {
-                if (parse_program_config(cfg_path, cfg))
-                {
-                    quit_action = program(cfg);
-                    shutdown_command = cfg.system_control.shutdown_command.c_str();
-                    reboot_command = cfg.system_control.reboot_command.c_str();
-                }
-                else
-                {
-                    cerr << "Failed to parse configuration file." << endl;
-                    return 1;
-                }
-            }
-            catch (libconfig::SettingNotFoundException const & e)
-            {
-                std::cerr << "Missing config path: " << e.getPath() << std::endl;
             }
 
         }

@@ -3,24 +3,6 @@
 #include <libconfig.h++>
 #include "program_config.hpp"
 
-// TODO replace with std::filesystem::path
-std::vector<boost::filesystem::path> get_config_directories()
-{
-    std::vector<boost::filesystem::path> paths;
-    if (auto result = std::getenv("XDG_CONFIG_HOME"))
-    {
-        paths.push_back(result);
-    }
-    if (auto result = std::getenv("HOME"))
-    {
-        auto path = result / boost::filesystem::path(".config");
-        if (paths.empty() || paths.back() != path)
-            paths.push_back(path);
-    }
-    paths.emplace_back(".");
-    return paths;
-}
-
 bool parse_vec(libconfig::Setting & s, vec & result)
 {
     return s.lookupValue("width", result.w)
@@ -87,7 +69,7 @@ bool parse_cover_config(libconfig::Setting & s, cover_config & result)
 
                 std::string tmp;
                 if (s.lookupValue("directory", tmp))
-                    result.directory = tmp;
+                    result.opt_directory = tmp;
 
                 return true;
             }
@@ -116,6 +98,12 @@ bool parse_program_config(boost::filesystem::path config_path, program_config & 
     libconfig::Config config;
     config.readFile(config_path.c_str());
     libconfig::Setting & program_setting = config.lookup("program");
+
+    int tmp;
+    if (program_setting.lookupValue("port", tmp))
+    {
+        result.opt_port = tmp;
+    }
 
     return parse_font(program_setting.lookup("default_font"), result.default_font)
         && parse_font(program_setting.lookup("big_font"), result.big_font)

@@ -37,7 +37,7 @@ struct swipe_config
 
 struct cover_config
 {
-    std::optional<std::string> directory;
+    std::optional<std::string> opt_directory;
     std::vector<std::string> extensions;
     std::vector<std::string> names;
 };
@@ -60,9 +60,9 @@ struct program_config
     //swipe_config swipe;
     cover_config cover;
     on_screen_keyboard_config on_screen_keyboard;
-};
 
-std::vector<boost::filesystem::path> get_config_directories();
+    std::optional<int> opt_port;
+};
 
 bool parse_program_config(boost::filesystem::path config_path, program_config & result);
 
