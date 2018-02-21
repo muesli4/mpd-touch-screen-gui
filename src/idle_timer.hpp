@@ -2,16 +2,16 @@
 #define IDLE_TIMER_HPP
 
 #include <chrono>
-#include <cstdint>
+
+#include "user_event.hpp"
 
 // This is a helper class to use a single SDL timer without the need to stop it
 // all the time.
 struct idle_timer_info
 {
-    idle_timer_info(uint32_t uet);
+    idle_timer_info(user_event_sender ues);
 
-    uint32_t const user_event_type;
-
+    user_event_sender & ues;
     void sync();
 
     void signal_user_activity();

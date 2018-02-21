@@ -2,8 +2,8 @@
 #include "idle_timer.hpp"
 #include "user_event.hpp"
 
-idle_timer_info::idle_timer_info(uint32_t uet)
-    : user_event_type(uet)
+idle_timer_info::idle_timer_info(user_event_sender ues)
+    : ues(ues)
 {
 }
 
@@ -38,7 +38,7 @@ Uint32 idle_timer_cb(Uint32 interval, void * iti_ptr)
     }
     else
     {
-        push_user_event(iti.user_event_type, user_event::TIMER_EXPIRED);
+        iti.ues.push(user_event::TIMER_EXPIRED);
         return 0;
     }
 }

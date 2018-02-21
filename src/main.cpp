@@ -95,12 +95,12 @@ enum quit_action
     NONE
 };
 
-template <typename T> void push_change_event(uint32_t event_type, user_event ue, T & old_val, T const & new_val)
+template <typename T> void push_change_event(user_event_sender & ues, user_event ue, T & old_val, T const & new_val)
 {
     if (old_val != new_val)
     {
         old_val = new_val;
-        push_user_event(event_type, ue);
+        ues.push(ue);
     }
 }
 
@@ -214,20 +214,16 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     bool current_playlist_needs_refresh = false;
 
     // Set up user events.
-    uint32_t const user_event_type = SDL_RegisterEvents(1);
-    if (user_event_type == static_cast<uint32_t>(-1))
-    {
-        throw std::runtime_error("out of SDL user events");
-    }
+    user_event_sender ues;
 
-    idle_timer_info iti(user_event_type);
+    idle_timer_info iti(ues);
     bool dimmed = false;
 
     // timer is enabled
     if (idle_timer_enabled(cfg))
     {
         // act as if the timer expired and it should dim now
-        push_user_event(user_event_type, user_event::TIMER_EXPIRED);
+        ues.push(user_event::TIMER_EXPIRED);
     }
 
     mpd_control mpdc(
@@ -242,15 +238,16 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                 current_song_path = sl.path;
                 current_song_pos = sl.pos;
             }
-            push_user_event(user_event_type, user_event::SONG_CHANGED);
+            ues.push(user_event::SONG_CHANGED);
         },
         [&](bool value)
         {
-            push_change_event(user_event_type, user_event::RANDOM_CHANGED, random, value);
+
+            push_change_event(ues, user_event::RANDOM_CHANGED, random, value);
         },
         [&]()
         {
-            push_user_event(user_event_type, user_event::PLAYLIST_CHANGED);
+            ues.push(user_event::PLAYLIST_CHANGED);
         }
     );
 
@@ -306,12 +303,12 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
             run = false;
         }
         // most of the events are not required for a standalone fullscreen application
-        else if (is_input_event(ev) || ev.type == user_event_type
+        else if (is_input_event(ev) || ues.is(ev.type)
                                     || ev.type == SDL_WINDOWEVENT
                 )
         {
             // handle asynchronous user events synchronously
-            if (ev.type == user_event_type)
+            if (ues.is(ev.type))
             {
                 switch (static_cast<user_event>(ev.user.code))
                 {
@@ -336,6 +333,14 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                         dimmed = true;
                         system(cfg.dim_idle_timer.dim_command.c_str());
                         continue;
+                    case user_event::ACTIVATE:
+                        break;
+                    case user_event::NAVIGATION:
+                        {
+                            navigation_type nt = static_cast<navigation_type>((uint64_t)ev.user.data1);
+                            // TODO 
+                        }
+                        break;
                     default:
                         break;
                 }
@@ -364,9 +369,6 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                         iti.sync();
                         // TODO refactor into class
                         SDL_AddTimer(std::chrono::milliseconds(cfg.dim_idle_timer.delay).count(), idle_timer_cb, &iti);
-                        // force a refresh by rebranding it - kind of hacky
-                        ev.type = user_event_type;
-                        ev.user.code = static_cast<int>(user_event::REFRESH);
                     }
                     else
                     {
