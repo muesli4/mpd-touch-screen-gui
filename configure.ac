@@ -21,6 +21,7 @@ PKG_CHECK_MODULES(CONFIG, libconfig++)
 AX_BOOST_BASE([1.35.0],,[AC_MSG_ERROR([boost was not found])])
 AX_BOOST_FILESYSTEM
 AX_BOOST_SYSTEM
+AX_BOOST_ASIO
 
 AC_CHECK_HEADERS([sys/eventfd.h unistd.h poll.h], [], [])
 
