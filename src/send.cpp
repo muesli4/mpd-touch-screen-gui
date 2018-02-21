@@ -3,7 +3,7 @@
 #include <boost/asio.hpp>
 
 // TODO read from config
-char const * const DEFAULT_PORT = "666";
+char const * const DEFAULT_PORT = "6666";
 
 int main(int argc, char ** argv)
 {

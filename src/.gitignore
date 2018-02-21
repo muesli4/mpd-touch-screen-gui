@@ -2,3 +2,4 @@
 Makefile
 Makefile.in
 mpd-touch-screen-gui
+mpd-touch-screen-gui-send

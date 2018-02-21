@@ -5,12 +5,14 @@ Makefile.in
 PKGBUILD
 aclocal.m4
 autom4te.cache/
+autoscan.log
 compile
 config.guess
 config.log
 config.status
 config.sub
 configure
+configure.scan
 debug_log
 depcomp
 install-sh

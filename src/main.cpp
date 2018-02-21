@@ -28,6 +28,7 @@
 #include "idle_timer.hpp"
 #include "mpd_control.hpp"
 #include "program_config.hpp"
+#include "udp_control.hpp"
 #include "user_event.hpp"
 #include "util.hpp"
 
@@ -251,6 +252,9 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
         }
     );
 
+    udp_control udp_control(6666, ues);
+
+    std::thread udp_thread(&udp_control::run, std::ref(udp_control));
     std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
 
     // get initial state from mpd
@@ -420,6 +424,8 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
 
     mpdc.stop();
     mpdc_thread.join();
+    udp_control.stop();
+    udp_thread.join();
 
     return result;
 }
