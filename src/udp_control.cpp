@@ -20,23 +20,42 @@ void udp_control::stop()
 
 void udp_control::run()
 {
-    while (!_io_context.stopped())
-    {
-        //constexpr std::size_t length = 512;
-        //char data[length];
-        char c;
-        ip::udp::endpoint client_endpoint;
+    std::cout << "Listening to commands on " << _socket.local_endpoint() << std::endl;
+    setup_receive();
+    _io_context.run();
+}
 
-        boost::system::error_code ec;
-
-        //_socket.receive_from(buffer(data, length), client_endpoint, 0, ec);
-        _socket.receive_from(buffer(&c, 1), client_endpoint, 0, ec);
-
-        std::cout << "Message from " << client_endpoint << std::endl;
-
-        if (ec == boost::system::errc::success)
+void udp_control::setup_receive()
+{
+    _socket.async_receive_from(buffer(&_c, 1), _sending_endpoint, [this](auto const & ec, auto br)
         {
-            switch (c)
+            this->handle_receive(ec, br);
+            this->setup_receive();
+        });
+}
+
+void udp_control::output_error(std::string msg)
+{
+    std::cerr << '[' << _sending_endpoint << "] " << msg << std::endl;;
+}
+void udp_control::output_info(std::string msg)
+{
+    std::cout << '[' << _sending_endpoint << "] " << msg << std::endl;;
+}
+
+void udp_control::handle_receive(boost::system::error_code const & ec, std::size_t bytes_received)
+{
+        if (ec != boost::system::errc::success)
+        {
+            output_error("Failed receiving command: " + ec.message());
+        }
+        else if (bytes_received != 1)
+        {
+            output_error("Invalid command length.");
+        }
+        else
+        {
+            switch (_c)
             {
                 case 'l': _ues.push_navigation(navigation_type::PREV_X); break;
                 case 'r': _ues.push_navigation(navigation_type::NEXT_X); break;
@@ -46,13 +65,10 @@ void udp_control::run()
                 case 'p': _ues.push_navigation(navigation_type::PREV); break;
                 case 'a': _ues.push(user_event::ACTIVATE); break;
                 default:
-                    std::cerr << "Invalid command: " << c << std::endl;
-                    break;
+                    output_error(std::string("Invalid command: ") + _c);
+                    return;
             }
+            output_info(std::string("Command: ") + _c);
         }
-        else
-        {
-            std::cerr << "Failed receiving message: " << ec.message() << std::endl;
-        }
-    }
 }
+
