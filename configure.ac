@@ -18,7 +18,7 @@ PKG_CHECK_MODULES(MPD_CLIENT, libmpdclient)
 PKG_CHECK_MODULES(ICU_UC, icu-uc)
 PKG_CHECK_MODULES(CONFIG, libconfig++)
 
-AX_BOOST_BASE([1.35.0],,[AC_MSG_ERROR([boost was not found])])
+AX_BOOST_BASE([1.35.0], [], [AC_MSG_ERROR([boost was not found])])
 AX_BOOST_FILESYSTEM
 AX_BOOST_SYSTEM
 AX_BOOST_ASIO
