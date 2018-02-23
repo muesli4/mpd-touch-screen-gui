@@ -13,6 +13,7 @@ mpd_touch_screen_gui_SOURCES = \
 	keypad.cpp                   \
 	main.cpp                     \
 	mpd_control.cpp              \
+	navigation_event.cpp         \
 	program_config.cpp           \
 	search_view.cpp              \
 	song_list_view.cpp           \

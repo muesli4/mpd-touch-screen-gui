@@ -4,13 +4,13 @@
 
 #include "user_event.hpp"
 
-user_event_sender::user_event_sender(uint32_t user_event_type) noexcept
+generic_user_event_sender::generic_user_event_sender(uint32_t user_event_type) noexcept
     : _user_event_type(user_event_type)
 {
 }
 
-user_event_sender::user_event_sender()
-    : user_event_sender(SDL_RegisterEvents(1))
+generic_user_event_sender::generic_user_event_sender()
+    : generic_user_event_sender(SDL_RegisterEvents(1))
 {
     if (_user_event_type == static_cast<uint32_t>(-1))
     {
@@ -18,34 +18,29 @@ user_event_sender::user_event_sender()
     }
 }
 
-user_event_sender::user_event_sender(user_event_sender const & other)
-    : user_event_sender(other._user_event_type)
+generic_user_event_sender::generic_user_event_sender(generic_user_event_sender const & other)
+    : generic_user_event_sender(other._user_event_type)
 {
 }
 
-void user_event_sender::push(user_event ue)
+bool generic_user_event_sender::is_event_type(uint32_t event_type) const
 {
-    push(ue, 0);
+    return event_type == _user_event_type;
 }
 
-void user_event_sender::push_navigation(navigation_type nt)
+void generic_user_event_sender::push_int(int code) const
 {
-    push(user_event::NAVIGATION, static_cast<int>(nt));
+    push_int_with_payload(code, 0);
 }
 
-bool user_event_sender::is(uint32_t uet)
-{
-    return uet == _user_event_type;
-}
-
-void user_event_sender::push(user_event ue, int data)
+void generic_user_event_sender::push_int_with_payload(int code, int data1) const
 {
     SDL_Event e;
     SDL_memset(&e, 0, sizeof(e));
 
     e.type = _user_event_type;
-    e.user.code = static_cast<int>(ue);
-    std::uintptr_t const p = static_cast<std::uintptr_t>(data);
+    e.user.code = static_cast<int>(code);
+    std::uintptr_t const p = static_cast<std::uintptr_t>(data1);
     e.user.data1 = reinterpret_cast<void *>(p);
     if (SDL_PushEvent(&e) < 0)
     {

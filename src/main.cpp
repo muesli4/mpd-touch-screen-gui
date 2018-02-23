@@ -29,6 +29,7 @@
 #include "config_file.hpp"
 #include "idle_timer.hpp"
 #include "mpd_control.hpp"
+#include "navigation_event.hpp"
 #include "program_config.hpp"
 #include "udp_control.hpp"
 #include "user_event.hpp"
@@ -59,7 +60,7 @@ std::optional<std::string> find_cover_file(std::string rel_song_dir_path, std::s
     {
         for (auto const & ext : extensions)
         {
-            std::string const cover_path = abs_cover_dir + name + "." + ext;
+            std::string const cover_path = abs_cover_dir + '/' + name + "." + ext;
             if (boost::filesystem::exists(boost::filesystem::path(cover_path)))
             {
                 return cover_path;
@@ -98,12 +99,13 @@ enum quit_action
     NONE
 };
 
-template <typename T> void push_change_event(user_event_sender & ues, user_event ue, T & old_val, T const & new_val)
+template <typename T, typename EventSender, typename Event>
+void push_change_event(EventSender & es, Event e, T & old_val, T const & new_val)
 {
     if (old_val != new_val)
     {
         old_val = new_val;
-        ues.push(ue);
+        es.push(e);
     }
 }
 
@@ -200,6 +202,34 @@ struct model_event_handler : callback_handler<playback_status_function>, callbac
     void process(model_event_type met);
 };
 
+enum class change_event_type
+{
+    RANDOM_CHANGED,
+    SONG_CHANGED,
+    PLAYLIST_CHANGED
+};
+
+void handle_other_event(SDL_Event const & e, widget_context & ctx, navigation_event_sender const & nes)
+{
+    if (nes.is_event_type(e.user.type))
+    {
+        navigation_event ne;
+        nes.read(e, ne);
+        if (ne.type == navigation_event_type::NAVIGATION)
+        {
+            ctx.navigate_selection(ne.nt);
+        }
+        else
+        {
+            ctx.activate();
+        }
+    }
+    else
+    {
+        ctx.process_event(e);
+    }
+}
+
 quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
 {
     quit_action result = quit_action::NONE;
@@ -217,16 +247,18 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     bool current_playlist_needs_refresh = false;
 
     // Set up user events.
-    user_event_sender ues;
+    enum_user_event_sender<change_event_type> ces;
+    enum_user_event_sender<idle_timer_event_type> tes;
+    navigation_event_sender nes;
 
-    idle_timer_info iti(ues);
+    idle_timer_info iti(tes);
     bool dimmed = false;
 
     // timer is enabled
     if (idle_timer_enabled(cfg))
     {
         // act as if the timer expired and it should dim now
-        ues.push(user_event::TIMER_EXPIRED);
+        tes.push(idle_timer_event_type::IDLE_TIMER_EXPIRED);
     }
 
     mpd_control mpdc(
@@ -241,16 +273,17 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                 current_song_path = sl.path;
                 current_song_pos = sl.pos;
             }
-            ues.push(user_event::SONG_CHANGED);
+
+            ces.push(change_event_type::SONG_CHANGED);
         },
         [&](bool value)
         {
 
-            push_change_event(ues, user_event::RANDOM_CHANGED, random, value);
+            push_change_event(ces, change_event_type::RANDOM_CHANGED, random, value);
         },
         [&]()
         {
-            ues.push(user_event::PLAYLIST_CHANGED);
+            ces.push(change_event_type::PLAYLIST_CHANGED);
         }
     );
     std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
@@ -259,7 +292,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     std::thread udp_thread;
     if (cfg.opt_port.has_value())
     {
-        opt_udp_control.emplace(cfg.opt_port.value(), ues);
+        opt_udp_control.emplace(cfg.opt_port.value(), nes);
         std::thread t { &udp_control::run, std::ref(opt_udp_control.value()) };
         udp_thread.swap(t);
     }
@@ -305,7 +338,6 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     widget_context ctx(renderer, { cfg.default_font, cfg.big_font }, main_widget);
     ctx.draw();
 
-
     while (run && SDL_WaitEvent(&ev) == 1)
     {
         if (is_quit_event(ev))
@@ -314,19 +346,21 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
             run = false;
         }
         // most of the events are not required for a standalone fullscreen application
-        else if (is_input_event(ev) || ues.is(ev.type)
+        else if (is_input_event(ev) || nes.is_event_type(ev.type)
+                                    || ces.is_event_type(ev.type)
+                                    || tes.is_event_type(ev.type)
                                     || ev.type == SDL_WINDOWEVENT
                 )
         {
             // handle asynchronous user events synchronously
-            if (ues.is(ev.type))
+            if (ces.is_event_type(ev.type))
             {
-                switch (static_cast<user_event>(ev.user.code))
+                switch (ces.read(ev))
                 {
-                    case user_event::SONG_CHANGED:
+                    case change_event_type::SONG_CHANGED:
                         refresh_cover = true;
                         break;
-                    case user_event::PLAYLIST_CHANGED:
+                    case change_event_type::PLAYLIST_CHANGED:
                         if (dimmed)
                             current_playlist_needs_refresh = true;
                         else
@@ -337,30 +371,20 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                             sv->on_playlist_changed();
                         }
                         break;
-                    case user_event::RANDOM_CHANGED:
+                    case change_event_type::RANDOM_CHANGED:
                         random_button->set_label(random_label(random));
-                        break;
-                    case user_event::TIMER_EXPIRED:
-                        dimmed = true;
-                        system(cfg.dim_idle_timer.dim_command.c_str());
-                        continue;
-                    case user_event::ACTIVATE:
-                        ctx.activate();
-                        break;
-                    case user_event::NAVIGATION:
-                        {
-                            std::uintptr_t const p = reinterpret_cast<std::uintptr_t>(ev.user.data1);
-                            navigation_type const nt = static_cast<navigation_type>(p);
-                            ctx.navigate_selection(nt);
-                        }
                         break;
                     default:
                         break;
                 }
-                // handle change events, but nothing else
-                // TODO not optimal since playlist changes are technically not necessary
-                if (dimmed)
-                    continue;
+                continue;
+            }
+            // dim idle timer expired
+            else if (tes.is_event_type(ev.type))
+            {
+                dimmed = true;
+                system(cfg.dim_idle_timer.dim_command.c_str());
+                continue;
             }
             else
             {
@@ -386,12 +410,12 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                     else
                     {
                         iti.signal_user_activity();
-                        ctx.process_event(ev);
+                        handle_other_event(ev, ctx, nes);
                     }
                 }
                 else
                 {
-                    ctx.process_event(ev);
+                    handle_other_event(ev, ctx, nes);
                 }
             }
 

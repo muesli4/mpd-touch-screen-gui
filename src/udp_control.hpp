@@ -3,11 +3,11 @@
 
 #include <boost/asio.hpp>
 
-#include "user_event.hpp"
+#include "navigation_event.hpp"
 
 struct udp_control
 {
-    udp_control(unsigned short port, user_event_sender & ues);
+    udp_control(unsigned short port, navigation_event_sender & nes);
 
     void stop();
     void run();
@@ -20,7 +20,7 @@ struct udp_control
     void setup_receive();
     void handle_receive(boost::system::error_code const & ec, std::size_t bytes_received);
 
-    user_event_sender _ues;
+    navigation_event_sender _nes;
     boost::asio::io_context _io_context;
     boost::asio::ip::udp::socket _socket;
     boost::asio::ip::udp::endpoint _sending_endpoint;

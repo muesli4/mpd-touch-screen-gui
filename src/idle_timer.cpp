@@ -2,8 +2,8 @@
 #include "idle_timer.hpp"
 #include "user_event.hpp"
 
-idle_timer_info::idle_timer_info(user_event_sender & ues)
-    : ues(ues)
+idle_timer_info::idle_timer_info(enum_user_event_sender<idle_timer_event_type> & ies)
+    : _ies(ies)
 {
 }
 
@@ -36,7 +36,7 @@ std::chrono::milliseconds idle_timer_info::callback()
     }
     else
     {
-        ues.push(user_event::TIMER_EXPIRED);
+        _ies.push(idle_timer_event_type::IDLE_TIMER_EXPIRED);
         return std::chrono::milliseconds(0);
     }
 }

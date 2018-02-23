@@ -6,8 +6,8 @@
 
 using namespace boost::asio;
 
-udp_control::udp_control(unsigned short port, user_event_sender & ues)
-    : _ues(ues)
+udp_control::udp_control(unsigned short port, navigation_event_sender & nes)
+    : _nes(nes)
     , _io_context()
     , _socket(_io_context, ip::udp::endpoint(ip::udp::v4(), port))
 {
@@ -55,19 +55,21 @@ void udp_control::handle_receive(boost::system::error_code const & ec, std::size
         }
         else
         {
+            navigation_event ne { .type = navigation_event_type::NAVIGATION };
             switch (_c)
             {
-                case 'l': _ues.push_navigation(navigation_type::PREV_X); break;
-                case 'r': _ues.push_navigation(navigation_type::NEXT_X); break;
-                case 'u': _ues.push_navigation(navigation_type::PREV_Y); break;
-                case 'd': _ues.push_navigation(navigation_type::NEXT_Y); break;
-                case 'n': _ues.push_navigation(navigation_type::NEXT); break;
-                case 'p': _ues.push_navigation(navigation_type::PREV); break;
-                case 'a': _ues.push(user_event::ACTIVATE); break;
+                case 'l': ne.nt = navigation_type::PREV_X; break;
+                case 'r': ne.nt = navigation_type::NEXT_X; break;
+                case 'u': ne.nt = navigation_type::PREV_Y; break;
+                case 'd': ne.nt = navigation_type::NEXT_Y; break;
+                case 'n': ne.nt = navigation_type::NEXT; break;
+                case 'p': ne.nt = navigation_type::PREV; break;
+                case 'a': ne.type = navigation_event_type::ACTIVATE; break;
                 default:
                     output_error(std::string("Invalid command: ") + _c);
                     return;
             }
+            _nes.push(ne);
             output_info(std::string("Command: ") + _c);
         }
 }
