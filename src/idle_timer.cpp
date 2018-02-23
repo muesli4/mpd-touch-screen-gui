@@ -2,7 +2,7 @@
 #include "idle_timer.hpp"
 #include "user_event.hpp"
 
-idle_timer_info::idle_timer_info(user_event_sender ues)
+idle_timer_info::idle_timer_info(user_event_sender & ues)
     : ues(ues)
 {
 }
@@ -24,22 +24,28 @@ std::chrono::milliseconds idle_timer_info::remaining_ms()
     return duration_cast<milliseconds>(_last_activity_tp - _start_tp);
 }
 
-Uint32 idle_timer_cb(Uint32 interval, void * iti_ptr)
+#include <iostream>
+std::chrono::milliseconds idle_timer_info::callback()
 {
-
-    idle_timer_info & iti = *reinterpret_cast<idle_timer_info *>(iti_ptr);
-
-    auto rem_ms = iti.remaining_ms();
+    auto rem_ms = remaining_ms();
 
     if (rem_ms.count() > 0)
     {
-        iti.sync();
-        return rem_ms.count();
+        sync();
+        return rem_ms;
     }
     else
     {
-        iti.ues.push(user_event::TIMER_EXPIRED);
-        return 0;
+        ues.push(user_event::TIMER_EXPIRED);
+        return std::chrono::milliseconds(0);
     }
+}
+
+Uint32 idle_timer_cb(Uint32 interval, void * iti_ptr)
+{
+    return
+        reinterpret_cast<idle_timer_info *>(iti_ptr)
+            ->callback()
+            .count();
 }
 

@@ -9,7 +9,7 @@
 // all the time.
 struct idle_timer_info
 {
-    idle_timer_info(user_event_sender ues);
+    idle_timer_info(user_event_sender & ues);
 
     user_event_sender & ues;
     void sync();
@@ -17,6 +17,8 @@ struct idle_timer_info
     void signal_user_activity();
 
     std::chrono::milliseconds remaining_ms();
+
+    std::chrono::milliseconds callback();
 
     private:
 
