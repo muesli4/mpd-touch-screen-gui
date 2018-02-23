@@ -21,6 +21,7 @@ struct user_event_sender
 {
     user_event_sender();
     user_event_sender(uint32_t user_event_type) noexcept;
+    user_event_sender(user_event_sender const & other);
 
     // TODO allows pushing invalid events
     void push(user_event ue);
