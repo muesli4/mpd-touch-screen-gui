@@ -170,7 +170,13 @@ void mpd_control::prev_song()
 
 void mpd_control::play_position(int pos)
 {
-    add_external_task([pos](mpd_connection * c){ mpd_run_play_pos(c, pos); });
+    add_external_task([pos](mpd_connection * c)
+    {
+        if (!mpd_run_play_pos(c, pos))
+        {
+            mpd_connection_clear_error(c);
+        }
+    });
 }
 
 void mpd_control::set_random(bool value)
