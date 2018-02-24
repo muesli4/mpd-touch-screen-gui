@@ -1,6 +1,8 @@
+#include <algorithm>
+
 #include <unicode/unistr.h>
 
-#include "song_list_view.hpp"
+#include "list_view_controls.hpp"
 
 #include "search_view.hpp"
 
@@ -13,7 +15,7 @@ search_view::search_view(vec size, std::string keys, std::vector<std::string> co
 }
 
 search_view::search_view(std::shared_ptr<keypad> keypad, std::shared_ptr<list_view> list_view, std::vector<std::string> const & values)
-    : embedded_widget<notebook>(std::vector<widget_ptr>{ keypad, song_list_view(list_view, "⌨", [this](){ on_back(); }) })
+    : embedded_widget<notebook>(std::vector<widget_ptr>{ keypad, add_list_view_controls(list_view, "⌨", [this](){ on_back(); }) })
     , _keypad(keypad)
     , _list_view(list_view)
     , _values(values)
@@ -44,5 +46,26 @@ void search_view::on_playlist_changed()
 {
     _list_view->set_position(0);
     on_back();
+}
+
+void search_view::set_position(std::size_t position)
+{
+    _list_view->set_position(position);
+}
+
+void search_view::set_filtered_highlight_position(std::size_t position)
+{
+    auto b = std::cbegin(_filtered_indices);
+    auto e = std::cend(_filtered_indices);
+    auto it = std::find(b, e, position);
+    if (it != e)
+    {
+        _list_view->set_highlight_position(std::distance(b, it));
+    }
+}
+
+void search_view::set_selected_position(std::size_t position)
+{
+    _list_view->set_selected_position(position);
 }
 

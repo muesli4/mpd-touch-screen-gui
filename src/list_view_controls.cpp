@@ -1,10 +1,10 @@
-#include "song_list_view.hpp"
+#include "list_view_controls.hpp"
 
 #include <libwtk-sdl2/box.hpp>
 #include <libwtk-sdl2/button.hpp>
 #include <libwtk-sdl2/padding.hpp>
 
-widget_ptr song_list_view(std::shared_ptr<list_view> lv, std::string left_label, std::function<void()> left_callback)
+widget_ptr add_list_view_controls(std::shared_ptr<list_view> lv, std::string left_label, std::function<void()> left_callback)
 {
     return vbox({ { true, lv }
                 , { false, hbox({ { false, std::make_shared<button>(left_label, left_callback) }

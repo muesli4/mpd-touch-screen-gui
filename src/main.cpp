@@ -37,7 +37,7 @@
 
 #include "cover_view.hpp"
 #include "search_view.hpp"
-#include "song_list_view.hpp"
+#include "list_view_controls.hpp"
 
 // future feature list and ideas:
 // TODO replace cycling with a menu
@@ -308,13 +308,13 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     auto random_button = std::make_shared<button>(random_label(random), [&](){ mpdc.set_random(!random); });
 
     auto cv = std::make_shared<cover_view>([&](swipe_direction dir){ handle_cover_swipe_direction(dir, mpdc, 5); }, [&](){ mpdc.toggle_pause(); });
-    auto slv = std::make_shared<list_view>(cpl, current_song_pos, [&mpdc](std::size_t pos){ mpdc.play_position(pos); });
-    auto sv = std::make_shared<search_view>(cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); });
+    auto playlist_v = std::make_shared<list_view>(cpl, current_song_pos, [&mpdc](std::size_t pos){ mpdc.play_position(pos); });
+    auto search_v = std::make_shared<search_view>(cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); });
 
     auto view_box = std::make_shared<notebook>(
         std::vector<widget_ptr>{ cv
-                               , song_list_view(slv, "Jump", [=, &current_song_pos](){ slv->set_position(current_song_pos); })
-                               , sv
+                               , add_list_view_controls(playlist_v, "Jump", [=, &current_song_pos](){ playlist_v->set_position(current_song_pos); })
+                               , search_v
                                , make_shutdown_view(result, run)
                                });
 
@@ -327,7 +327,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
 
     box main_widget
         ( box::orientation::HORIZONTAL
-        , { { false, pad(5, button_controls) }
+        , { { false, pad_right(-5, pad(5, button_controls)) }
           , { true, pad(5, view_box) }
           }
         , 0
@@ -359,6 +359,8 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                 {
                     case change_event_type::SONG_CHANGED:
                         refresh_cover = true;
+                        playlist_v->set_highlight_position(current_song_pos);
+                        search_v->set_filtered_highlight_position(current_song_pos);
                         break;
                     case change_event_type::PLAYLIST_CHANGED:
                         if (dimmed)
@@ -367,8 +369,8 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                         {
                             refresh_current_playlist(cpl, cpv, mpdc);
 
-                            slv->set_position(0);
-                            sv->on_playlist_changed();
+                            playlist_v->set_position(0);
+                            search_v->on_playlist_changed();
                         }
                         break;
                     case change_event_type::RANDOM_CHANGED:
@@ -397,8 +399,8 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                             refresh_current_playlist(cpl, cpv, mpdc);
                             current_playlist_needs_refresh = false;
 
-                            slv->set_position(0);
-                            sv->on_playlist_changed();
+                            playlist_v->set_position(0);
+                            search_v->on_playlist_changed();
                         }
                         // ignore one event, turn on lights
                         dimmed = false;

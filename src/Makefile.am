@@ -16,7 +16,7 @@ mpd_touch_screen_gui_SOURCES = \
 	navigation_event.cpp         \
 	program_config.cpp           \
 	search_view.cpp              \
-	song_list_view.cpp           \
+	list_view_controls.cpp       \
 	udp_control.cpp              \
 	user_event.cpp               \
 	util.cpp

@@ -9,7 +9,7 @@
 
 
 // Adds controls to a list view.
-widget_ptr song_list_view(std::shared_ptr<list_view> lv, std::string left_label, std::function<void()> left_callback);
+widget_ptr add_list_view_controls(std::shared_ptr<list_view> lv, std::string left_label, std::function<void()> left_callback);
 
 /*
 struct song_list_view : embedded_widget<box>

@@ -13,6 +13,9 @@ struct search_view : embedded_widget<notebook>
     search_view(vec size, std::string keys, std::vector<std::string> const & values, std::function<void(std::size_t)> activate_callback);
 
     void on_playlist_changed();
+    void set_position(std::size_t position);
+    void set_filtered_highlight_position(std::size_t position);
+    void set_selected_position(std::size_t position);
 
     private:
 
