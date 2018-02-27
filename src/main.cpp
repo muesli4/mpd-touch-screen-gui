@@ -323,7 +323,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
             { { false, std::make_shared<button>("♫", [&](){ view_box->set_page((view_box->get_page() + 1) % 4);  }) }
             , { false, std::make_shared<button>("►", [&](){ mpdc.toggle_pause(); }) } // choose one of "❚❚"  "▍▍""▋▋"
             , { false, random_button }
-            }, 5);
+            }, 5, true);
 
     box main_widget
         ( box::orientation::HORIZONTAL
@@ -331,7 +331,6 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
           , { true, pad(5, view_box) }
           }
         , 0
-        , false
         );
 
     // TODO add dir_unambig_factor_threshold from config
@@ -577,9 +576,9 @@ int main(int argc, char * argv[])
                         return 1;
                     }
                 }
-                catch (libconfig::SettingNotFoundException const & e)
+                catch (libconfig::ConfigException const & e)
                 {
-                    cerr << "Missing config path: " << e.getPath() << endl;
+                    cerr << e.what() << endl;
                 }
             }
 
