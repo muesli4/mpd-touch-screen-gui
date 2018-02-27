@@ -360,7 +360,6 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                         refresh_cover = true;
                         playlist_v->set_highlight_position(current_song_pos);
                         search_v->set_filtered_highlight_position(current_song_pos);
-                        break;
                     case change_event_type::PLAYLIST_CHANGED:
                         if (dimmed)
                             current_playlist_needs_refresh = true;
@@ -378,7 +377,9 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                     default:
                         break;
                 }
-                continue;
+
+                if (dimmed)
+                    continue;
             }
             // dim idle timer expired
             else if (tes.is_event_type(ev.type))
@@ -420,7 +421,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                 }
             }
 
-
+            // Avoid unnecessary I/O on slower devices.
             if (refresh_cover)
             {
                 cover_type ct;
@@ -450,7 +451,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                 refresh_cover = false;
             }
 
-            ctx.draw();
+            ctx.draw_dirty();
         }
     }
 
