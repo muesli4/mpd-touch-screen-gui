@@ -24,7 +24,7 @@ struct cover_view : embedded_widget<notebook>
     std::vector<widget *> get_children() override;
     std::vector<widget const *> get_children() const override;
 
-    void apply_layout_to_children() override;
+    void on_box_allocated() override;
 
     void set_cover(unique_texture_ptr texture_ptr);
     void set_cover(std::string title, std::string artist, std::string album);

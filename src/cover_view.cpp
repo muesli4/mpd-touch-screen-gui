@@ -33,7 +33,7 @@ std::vector<widget const *> cover_view::get_children() const
     return { &_embedded_widget, &_swipe_area };
 }
 
-void cover_view::apply_layout_to_children()
+void cover_view::on_box_allocated()
 {
     _embedded_widget.apply_layout(get_box());
     _swipe_area.apply_layout(get_box());
