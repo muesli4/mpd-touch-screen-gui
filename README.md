@@ -31,15 +31,15 @@ If you don't intend to run it on the same machine, you should set the MPD enviro
 
 # Requirements
 
-* SDL2_ttf
-* SDL2_image
-* sdl2
-* libmpdclient
-* icu-uc
+* SDL2_ttf (font rendering)
+* SDL2_image (cover image loading)
+* sdl2 (rendering)
+* libmpdclient (communication with MPD instance)
+* icu-uc (lower-case conversion for case insensitive search)
 * boost_filesystem
 * boost_system
-* boost_asio
-* libwtk-sdl2
+* boost_asio (UDP interface for remote navigation)
+* libwtk-sdl2 (widgets)
 * C++17
 
 # Installation
