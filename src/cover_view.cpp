@@ -42,7 +42,9 @@ void cover_view::on_box_allocated()
 void cover_view::set_cover(unique_texture_ptr texture_ptr)
 {
     _embedded_widget.set_page(1);
-    _texture_view->set_texture(std::move(texture_ptr));
+    // Minimum width is 0 and natural width is actual width of the image.
+    // TODO Add option to scale to box
+    _texture_view->set_texture(std::move(texture_ptr), 0, -1);
 }
 
 void cover_view::set_cover(std::string title, std::string artist, std::string album)
