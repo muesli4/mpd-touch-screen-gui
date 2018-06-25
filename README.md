@@ -50,10 +50,6 @@ If you don't intend to run it on the same machine, you should set the MPD enviro
 * `make`
 * `make install`
 
-# State
-
-I have been using it for a while now and it has been very stable. However, I'm currently trying to improve the UI and add IR remote control support for navigation.
-
 # Contact
 
 If you find my code useful please let me know. I'm also interested in your use case, any suggestions, improvements or criticism. Cheers!
