@@ -17,7 +17,7 @@
 #include <boost/system/error_code.hpp>
 #include <libconfig.h++>
 #include <libwtk-sdl2/box.hpp>
-#include <libwtk-sdl2/button.hpp>
+#include <libwtk-sdl2/text_button.hpp>
 #include <libwtk-sdl2/list_view.hpp>
 #include <libwtk-sdl2/notebook.hpp>
 #include <libwtk-sdl2/padding.hpp>
@@ -145,8 +145,8 @@ bool idle_timer_enabled(program_config const & cfg)
 
 widget_ptr make_shutdown_view(quit_action & result, bool & run)
 {
-    return vbox({ { false, std::make_shared<button>("Shutdown", [&run, &result](){ result = quit_action::SHUTDOWN; run = false; }) }
-                , { false, std::make_shared<button>("Reboot", [&run, &result](){ result = quit_action::REBOOT; run = false; }) }
+    return vbox({ { false, std::make_shared<text_button>("Shutdown", [&run, &result](){ result = quit_action::SHUTDOWN; run = false; }) }
+                , { false, std::make_shared<text_button>("Reboot", [&run, &result](){ result = quit_action::REBOOT; run = false; }) }
                 }, 5, true);
 }
 
@@ -305,7 +305,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     SDL_Event ev;
 
     // TODO move to MVC
-    auto random_button = std::make_shared<button>(random_label(random), [&](){ mpdc.set_random(!random); });
+    auto random_button = std::make_shared<text_button>(random_label(random), [&](){ mpdc.set_random(!random); });
 
     auto cv = std::make_shared<cover_view>([&](swipe_direction dir){ handle_cover_swipe_direction(dir, mpdc, 5); }, [&](){ mpdc.toggle_pause(); });
     auto playlist_v = std::make_shared<list_view>(cpl, current_song_pos, [&mpdc](std::size_t pos){ mpdc.play_position(pos); });
@@ -320,8 +320,8 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
 
     // TODO introduce image button and add symbols from, e.g.: https://material.io/icons/
     auto button_controls = vbox(
-            { { false, std::make_shared<button>("♫", [&](){ view_box->set_page((view_box->get_page() + 1) % 4);  }) }
-            , { false, std::make_shared<button>("►", [&](){ mpdc.toggle_pause(); }) } // choose one of "❚❚"  "▍▍""▋▋"
+            { { false, std::make_shared<text_button>("♫", [&](){ view_box->set_page((view_box->get_page() + 1) % 4);  }) }
+            , { false, std::make_shared<text_button>("►", [&](){ mpdc.toggle_pause(); }) } // choose one of "❚❚"  "▍▍""▋▋"
             , { false, random_button }
             }, 5, true);
 

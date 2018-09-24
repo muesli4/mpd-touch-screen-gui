@@ -2,7 +2,7 @@
 
 #include <string>
 #include <libwtk-sdl2/grid.hpp>
-#include <libwtk-sdl2/button.hpp>
+#include <libwtk-sdl2/text_button.hpp>
 #include <libwtk-sdl2/embedded_widget.hpp>
 
 // Provides a widget with a keypad that can be submitted.
@@ -16,15 +16,15 @@ struct keypad : embedded_widget<grid>
 
     private:
 
-    keypad(vec size, std::tuple<std::shared_ptr<button>, std::vector<grid::entry>> tmp);
+    keypad(vec size, std::tuple<std::shared_ptr<text_button>, std::vector<grid::entry>> tmp);
 
     void remove_last();
     void update();
     void append(std::string c);
     
-    std::tuple<std::shared_ptr<button>, std::vector<grid::entry>> construct(vec size, std::string keys, std::function<void(std::string)> submit_callback);
+    std::tuple<std::shared_ptr<text_button>, std::vector<grid::entry>> construct(vec size, std::string keys, std::function<void(std::string)> submit_callback);
 
-    std::shared_ptr<button> _submit_button;
+    std::shared_ptr<text_button> _submit_button;
     std::string _search_term;
 };
 
