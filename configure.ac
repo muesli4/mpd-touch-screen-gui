@@ -29,7 +29,7 @@ AC_CHECK_HEADERS([sys/eventfd.h unistd.h poll.h], [], [])
 AX_PTHREAD
 
 
-AC_CONFIG_FILES([Makefile src/Makefile data/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile data/Makefile data/icons/Makefile])
 
 #AM_GNU_GETTEXT([external])
 #AM_GNU_GETTEXT_VERSION([0.19.7])

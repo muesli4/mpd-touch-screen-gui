@@ -1,3 +1,10 @@
+#ifndef PACKAGE_NAME
+#define PACKAGE_NAME "mpd-touch-screen-gui"
+#endif
+#ifndef VERSION
+#define VERSION "unknown"
+#endif
+
 #include <array>
 #include <chrono>
 #include <condition_variable>
@@ -18,6 +25,7 @@
 #include <libconfig.h++>
 #include <libwtk-sdl2/box.hpp>
 #include <libwtk-sdl2/text_button.hpp>
+#include <libwtk-sdl2/texture_button.hpp>
 #include <libwtk-sdl2/list_view.hpp>
 #include <libwtk-sdl2/notebook.hpp>
 #include <libwtk-sdl2/padding.hpp>
@@ -150,11 +158,7 @@ widget_ptr make_shutdown_view(quit_action & result, bool & run)
                 }, 5, true);
 }
 
-std::string random_label(bool random)
-{
-    return random ? "¬R" : "R";
-}
-
+/*
 // Types of events that come from a model.
 enum class model_event_type
 {
@@ -201,12 +205,14 @@ struct model_event_handler : callback_handler<playback_status_function>, callbac
 {
     void process(model_event_type met);
 };
+*/
 
 enum class change_event_type
 {
     RANDOM_CHANGED,
     SONG_CHANGED,
-    PLAYLIST_CHANGED
+    PLAYLIST_CHANGED,
+    PLAYBACK_STATE_CHANGED
 };
 
 void handle_other_event(SDL_Event const & e, widget_context & ctx, navigation_event_sender const & nes)
@@ -230,6 +236,78 @@ void handle_other_event(SDL_Event const & e, widget_context & ctx, navigation_ev
     }
 }
 
+widget_ptr static_texture_button(SDL_Renderer * renderer, std::string filename, std::function<void()> callback)
+{
+    return std::make_shared<texture_button>(load_shared_texture_from_image(renderer, filename), callback);
+}
+
+template <int N>
+std::array<unique_texture_ptr, N> load_texture_array_from_files(SDL_Renderer * r, std::array<std::string, N> filenames)
+{
+    std::array<unique_texture_ptr, N> result;
+    for (int i = 0; i < N; ++i)
+    {
+        result[i] = load_texture_from_image(r, filenames[i]);
+    }
+    return result;
+}
+
+template <typename Enum, int N>
+struct enum_texture_button : button
+{
+    typedef std::array<unique_texture_ptr, N> texture_ptr_array;
+
+    enum_texture_button(texture_ptr_array && textures, Enum state, std::function<void()> callback)
+        : button(callback)
+        , _state(state)
+        , _textures(std::move(textures))
+    {
+        mark_dirty();
+    }
+
+    ~enum_texture_button() override
+    {
+    }
+
+    void set_state(Enum state)
+    {
+        _state = state;
+        mark_dirty();
+    }
+
+    private:
+
+    SDL_Texture const * get_texture() const
+    {
+        return _textures[static_cast<int>(_state)].get();
+    }
+
+    void draw_drawable(draw_context & dc, rect box) const override
+    {
+        auto tex = get_texture();
+
+        rect tex_box = center_vec_within_rect(texture_dim(tex), get_box());
+        // TODO allow nullptr? how to prevent it?
+        dc.copy_texture(const_cast<SDL_Texture *>(tex), tex_box);
+    }
+
+    vec get_drawable_size() const override
+    {
+        return texture_dim(get_texture());
+    }
+
+    // only local state for redraw
+    Enum _state;
+
+    texture_ptr_array _textures;
+};
+
+template <typename Enum, int N>
+std::shared_ptr<enum_texture_button<Enum, N>> make_enum_texture_button(SDL_Renderer * renderer, Enum state, std::array<std::string, N> && filenames, std::function<void()> callback)
+{
+    return std::make_shared<enum_texture_button<Enum, N>>(load_texture_array_from_files<N>(renderer, std::move(filenames)), state, callback);
+}
+
 quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
 {
     quit_action result = quit_action::NONE;
@@ -238,6 +316,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     std::string current_song_path;
 
     bool random;
+    mpd_state playback_state = MPD_STATE_UNKNOWN;
 
     unsigned int current_song_pos = 0;
     std::vector<std::string> cpl;
@@ -278,12 +357,15 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
         },
         [&](bool value)
         {
-
             push_change_event(ces, change_event_type::RANDOM_CHANGED, random, value);
         },
         [&]()
         {
             ces.push(change_event_type::PLAYLIST_CHANGED);
+        },
+        [&](mpd_state state)
+        {
+            push_change_event(ces, change_event_type::PLAYBACK_STATE_CHANGED, playback_state, state);
         }
     );
     std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
@@ -300,13 +382,14 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     // get initial state from mpd
     std::tie(cpl, cpv) = mpdc.get_current_playlist();
     random = mpdc.get_random();
+    // TODO ask mpd state!
 
     bool run = true;
     SDL_Event ev;
 
     // TODO move to MVC
-    auto random_button = std::make_shared<text_button>(random_label(random), [&](){ mpdc.set_random(!random); });
 
+    // construct views
     auto cv = std::make_shared<cover_view>([&](swipe_direction dir){ handle_cover_swipe_direction(dir, mpdc, 5); }, [&](){ mpdc.toggle_pause(); });
     auto playlist_v = std::make_shared<list_view>(cpl, current_song_pos, [&mpdc](std::size_t pos){ mpdc.play_position(pos); });
     auto search_v = std::make_shared<search_view>(cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); });
@@ -318,10 +401,32 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                                , make_shutdown_view(result, run)
                                });
 
-    // TODO introduce image button and add symbols from, e.g.: https://material.io/icons/
+// TODO seems like the wrong place
+#define ICONDIR PKGDATA "/icons/"
+    //"/icons/"
+    // side bar button controls
+    auto random_button =
+        make_enum_texture_button<bool, 2>( renderer
+                                         , random
+                                         , { ICONDIR "random_on.png"
+                                           , ICONDIR "random_off.png"
+                                           }
+                                         , [&](){ mpdc.set_random(!random); }
+                                         );
+    auto play_button =
+        make_enum_texture_button<mpd_state, 4>( renderer
+                                              , playback_state
+                                              , { ICONDIR "play.png"
+                                                , ICONDIR "play.png"
+                                                , ICONDIR "pause.png"
+                                                , ICONDIR "play.png"
+                                                }
+                                              , [&](){ mpdc.toggle_pause(); }
+                                              );
+
     auto button_controls = vbox(
-            { { false, std::make_shared<text_button>("♫", [&](){ view_box->set_page((view_box->get_page() + 1) % 4);  }) }
-            , { false, std::make_shared<text_button>("►", [&](){ mpdc.toggle_pause(); }) } // choose one of "❚❚"  "▍▍""▋▋"
+            { { false, static_texture_button(renderer, ICONDIR "apps.png", [&](){ view_box->set_page((view_box->get_page() + 1) % 4);  }) }
+            , { false, play_button }
             , { false, random_button }
             }, 5, true);
 
@@ -372,7 +477,10 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                         }
                         break;
                     case change_event_type::RANDOM_CHANGED:
-                        random_button->set_label(random_label(random));
+                        random_button->set_state(random);
+                        break;
+                    case change_event_type::PLAYBACK_STATE_CHANGED:
+                        play_button->set_state(playback_state);
                         break;
                     default:
                         break;

@@ -19,12 +19,13 @@ playlist_change_info::playlist_change_info(int nv, playlist_change_info::diff_ty
 {
 }
 
-mpd_control::mpd_control(std::function<void(std::optional<song_location>)> new_song_cb, std::function<void(bool)> random_cb, std::function<void()> playlist_changed_cb)
+mpd_control::mpd_control(std::function<void(std::optional<song_location>)> new_song_cb, std::function<void(bool)> random_cb, std::function<void()> playlist_changed_cb, std::function<void(mpd_state)> playback_state_changed_cb)
     : _c(mpd_connection_new(nullptr, 0, 0))
     , _run(true)
     , _new_song_cb(new_song_cb)
     , _random_cb(random_cb)
     , _playlist_changed_cb(playlist_changed_cb)
+    , _playback_state_changed_cb(playback_state_changed_cb)
 {
     if (mpd_connection_get_error(_c) != MPD_ERROR_SUCCESS)
         throw std::runtime_error(
@@ -94,6 +95,11 @@ void mpd_control::run()
                     new_song_cb(song);
             }
             last_song = song;
+            {
+                mpd_status * s = mpd_run_status(_c);
+                _playback_state_changed_cb(mpd_status_get_state(s));
+                mpd_status_free(s);
+            }
         }
         if (idle_event & MPD_IDLE_OPTIONS)
         {

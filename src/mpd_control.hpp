@@ -41,6 +41,7 @@ struct mpd_control
         ( std::function<void(std::optional<song_location>)> new_song_cb
         , std::function<void(bool)> random_cb
         , std::function<void()> playlist_changed_cb
+        , std::function<void(mpd_state)> playback_state_changed_cb
         );
     ~mpd_control();
 
@@ -93,6 +94,7 @@ struct mpd_control
     std::function<void(std::optional<song_location>)> _new_song_cb;
     std::function<void(bool)> _random_cb;
     std::function<void()> _playlist_changed_cb;
+    std::function<void(mpd_state)> _playback_state_changed_cb;
 
     std::mutex _external_tasks_mutex;
     std::deque<std::function<void(mpd_connection *)>> _external_tasks;
