@@ -13,7 +13,6 @@
 
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
-#include <boost/filesystem.hpp>
 #include <libwtk-sdl2/box.hpp>
 #include <libwtk-sdl2/text_button.hpp>
 #include <libwtk-sdl2/texture_button.hpp>
@@ -31,28 +30,10 @@
 #include "udp_control.hpp"
 #include "user_event.hpp"
 #include "util.hpp"
+#include "widget_util.hpp"
 
 #include "cover_view.hpp"
 #include "search_view.hpp"
-#include "list_view_controls.hpp"
-
-std::optional<std::string> find_cover_file(std::string rel_song_dir_path, std::string base_dir, std::vector<std::string> names, std::vector<std::string> extensions)
-{
-    std::string const abs_cover_dir = absolute_cover_path(base_dir, basename(rel_song_dir_path));
-    for (auto const & name : names)
-    {
-        for (auto const & ext : extensions)
-        {
-            std::string const cover_path = abs_cover_dir + '/' + name + "." + ext;
-            if (boost::filesystem::exists(boost::filesystem::path(cover_path)))
-            {
-                return cover_path;
-            }
-        }
-    }
-
-    return std::nullopt;
-}
 
 void handle_cover_swipe_direction(swipe_direction dir, mpd_control & mpdc, unsigned int volume_step)
 {
@@ -196,11 +177,6 @@ void handle_other_event(SDL_Event const & e, widget_context & ctx, navigation_ev
     {
         ctx.process_event(e);
     }
-}
-
-widget_ptr make_texture_button(SDL_Renderer * renderer, std::string filename, std::function<void()> callback)
-{
-    return std::make_shared<texture_button>(load_shared_texture_from_image(renderer, filename), callback);
 }
 
 template <int N>
@@ -364,11 +340,11 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
         // construct views
         auto cv = std::make_shared<cover_view>([&](swipe_direction dir){ handle_cover_swipe_direction(dir, mpdc, 5); }, [&](){ mpdc.toggle_pause(); });
         auto playlist_v = std::make_shared<list_view>(cpl, current_song_pos, [&mpdc](std::size_t pos){ mpdc.play_position(pos); });
-        auto search_v = std::make_shared<search_view>(cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); });
+        auto search_v = std::make_shared<search_view>(renderer, cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); });
 
         auto view_box = std::make_shared<notebook>(
             std::vector<widget_ptr>{ cv
-                                , add_list_view_controls(playlist_v, "Jump", [=, &current_song_pos](){ playlist_v->set_position(current_song_pos); })
+                                , add_list_view_controls(renderer, playlist_v, ICONDIR "jump_to_arrow.png", [=, &current_song_pos](){ playlist_v->set_position(current_song_pos); })
                                 , search_v
                                 , make_shutdown_view(result, run)
                                 });

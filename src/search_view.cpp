@@ -2,20 +2,19 @@
 
 #include <unicode/unistr.h>
 
-#include "list_view_controls.hpp"
-
+#include "widget_util.hpp"
 #include "search_view.hpp"
 
-search_view::search_view(vec size, std::string keys, std::vector<std::string> const & values, std::function<void(std::size_t)> activate_callback)
-    : search_view( std::make_shared<keypad>(size, keys, [=](auto str){ on_submit(str); })
-            , std::make_shared<list_view>(_filtered_values, 0, [=](auto idx){ activate_callback(this->_filtered_indices[idx]); })
-            , values
-            )
+search_view::search_view(SDL_Renderer * r, vec size, std::string keys, std::vector<std::string> const & values, std::function<void(std::size_t)> activate_callback)
+    : search_view(r, std::make_shared<keypad>(size, keys, [=](auto str){ on_submit(str); })
+    , std::make_shared<list_view>(_filtered_values, 0, [=](auto idx){ activate_callback(this->_filtered_indices[idx]); })
+    , values
+    )
 {
 }
 
-search_view::search_view(std::shared_ptr<keypad> keypad, std::shared_ptr<list_view> list_view, std::vector<std::string> const & values)
-    : embedded_widget<notebook>(std::vector<widget_ptr>{ keypad, add_list_view_controls(list_view, "⌨", [this](){ on_back(); }) })
+search_view::search_view(SDL_Renderer * r, std::shared_ptr<keypad> keypad, std::shared_ptr<list_view> list_view, std::vector<std::string> const & values)
+    : embedded_widget<notebook>(std::vector<widget_ptr>{ keypad, add_list_view_controls(r, list_view, ICONDIR "keyboard.png", [this](){ on_back(); }) })
     , _keypad(keypad)
     , _list_view(list_view)
     , _values(values)

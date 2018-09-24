@@ -10,7 +10,7 @@
 
 struct search_view : embedded_widget<notebook>
 {
-    search_view(vec size, std::string keys, std::vector<std::string> const & values, std::function<void(std::size_t)> activate_callback);
+    search_view(SDL_Renderer * r, vec size, std::string keys, std::vector<std::string> const & values, std::function<void(std::size_t)> activate_callback);
 
     void on_playlist_changed();
     void set_position(std::size_t position);
@@ -19,7 +19,7 @@ struct search_view : embedded_widget<notebook>
 
     private:
 
-    search_view(std::shared_ptr<keypad> keypad, std::shared_ptr<list_view> list_view, std::vector<std::string> const & values);
+    search_view(SDL_Renderer * r, std::shared_ptr<keypad> keypad, std::shared_ptr<list_view> list_view, std::vector<std::string> const & values);
 
     void on_submit(std::string search_term);
     void on_back();

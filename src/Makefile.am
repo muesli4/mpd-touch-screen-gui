@@ -17,10 +17,10 @@ mpd_touch_screen_gui_SOURCES = \
 	navigation_event.cpp         \
 	program_config.cpp           \
 	search_view.cpp              \
-	list_view_controls.cpp       \
 	udp_control.cpp              \
 	user_event.cpp               \
-	util.cpp
+	util.cpp                     \
+	widget_util.cpp
 
 mpd_touch_screen_gui_LDADD = $(SDL2_LIBS) $(SDL2_IMG_LIBS) $(LIBWTK_SDL2_LIBS) $(MPD_CLIENT_LIBS) $(ICU_UC_LIBS) $(CONFIG_LIBS) $(BOOST_FILESYSTEM_LIB) $(BOOST_SYSTEM_LIB) $(PTHREAD_LIBS) $(PTHREAD_CFLAGS)
 
