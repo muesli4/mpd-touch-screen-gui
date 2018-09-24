@@ -7,3 +7,7 @@ More information can be found under:
 The license and original project is located here:
 
     https://github.com/google/material-design-icons
+
+Modifications:
+
+* The `navigate-next` icon has been modified to form `jump_to_arrow.png`.
