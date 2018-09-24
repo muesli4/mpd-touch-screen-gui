@@ -9,6 +9,7 @@ bin_PROGRAMS = mpd-touch-screen-gui mpd-touch-screen-gui-send
 mpd_touch_screen_gui_SOURCES = \
 	config_file.cpp              \
 	cover_view.cpp               \
+	event_loop.cpp               \
 	idle_timer.cpp               \
 	keypad.cpp                   \
 	main.cpp                     \
