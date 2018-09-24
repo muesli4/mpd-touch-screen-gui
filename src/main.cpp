@@ -401,9 +401,6 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                                , make_shutdown_view(result, run)
                                });
 
-// TODO seems like the wrong place
-#define ICONDIR PKGDATA "/icons/"
-    //"/icons/"
     // side bar button controls
     auto random_button =
         make_enum_texture_button<bool, 2>( renderer

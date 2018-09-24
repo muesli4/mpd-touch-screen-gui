@@ -2,7 +2,7 @@
 #debug: CXXFLAGS += '-ggdb' '-O0'
 #opt:   CXXFLAGS += '-O2'
 
-AM_CPPFLAGS = -DPKGDATA="\"$(pkgdatadir)\"" $(BOOST_CPPFLAGS)
+AM_CPPFLAGS = -DPKGDATA="\"$(pkgdatadir)\"" $(BOOST_CPPFLAGS) -DICONDIR='"$(pkgdatadir)/icons/"'
 
 bin_PROGRAMS = mpd-touch-screen-gui mpd-touch-screen-gui-send
 
