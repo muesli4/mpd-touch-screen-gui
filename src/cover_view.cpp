@@ -12,6 +12,7 @@ cover_view::cover_view(std::shared_ptr<label> l, std::shared_ptr<texture_view> t
     , _texture_view(tv)
     , _swipe_area(swipe_callback, press_callback)
 {
+    _label->set_wrap(true);
 }
 
 cover_view::~cover_view()
