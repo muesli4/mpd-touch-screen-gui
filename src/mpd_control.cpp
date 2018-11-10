@@ -53,7 +53,7 @@ void mpd_control::run()
 
     while (_run)
     {
-        mpd_send_idle_mask(_c, static_cast<mpd_idle>(MPD_IDLE_PLAYER | MPD_IDLE_OPTIONS));
+        mpd_send_idle_mask(_c, static_cast<mpd_idle>(MPD_IDLE_PLAYER | MPD_IDLE_OPTIONS | MPD_IDLE_PLAYLIST));
 
 #ifdef USE_POLL
         {
@@ -115,6 +115,10 @@ void mpd_control::run()
                 _external_tasks.front()(_c);
                 _external_tasks.pop_front();
             }
+        }
+        if (idle_event & MPD_IDLE_PLAYLIST)
+        {
+            _playlist_changed_cb();
         }
         {
             scoped_lock lock(_external_song_queries_mutex);

@@ -410,6 +410,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                             refresh_cover = true;
                             playlist_v->set_highlight_position(current_song_pos);
                             search_v->set_filtered_highlight_position(current_song_pos);
+                            break;
                         case change_event_type::PLAYLIST_CHANGED:
                             if (dimmed)
                                 current_playlist_needs_refresh = true;

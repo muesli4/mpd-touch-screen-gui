@@ -43,6 +43,7 @@ void search_view::on_back()
 
 void search_view::on_playlist_changed()
 {
+    // TODO safe search term in optional and do the search again if there has been an active search before
     _list_view->set_position(0);
     on_back();
 }
