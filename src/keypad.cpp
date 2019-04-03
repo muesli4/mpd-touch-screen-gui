@@ -44,6 +44,11 @@ void keypad::clear()
     update();
 }
 
+std::string_view const keypad::get_input() const
+{
+    return _search_term;
+}
+
 std::tuple<std::shared_ptr<text_button>, std::vector<grid::entry>> keypad::construct(vec size, std::string keys, std::function<void(std::string)> submit_callback)
 {
     int const num_letter_keys = size.w * size.h;

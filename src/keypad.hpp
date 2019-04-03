@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <libwtk-sdl2/grid.hpp>
 #include <libwtk-sdl2/text_button.hpp>
 #include <libwtk-sdl2/embedded_widget.hpp>
@@ -13,6 +14,7 @@ struct keypad : embedded_widget<grid>
     ~keypad() override;
 
     void clear();
+    std::string_view const get_input() const;
 
     private:
 
