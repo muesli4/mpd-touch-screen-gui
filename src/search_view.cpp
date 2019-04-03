@@ -23,6 +23,10 @@ search_view::search_view(SDL_Renderer * r, std::shared_ptr<keypad> keypad, std::
 
 void search_view::on_submit(std::string search_term)
 {
+    // TODO check if changed
+    _filtered_indices.clear();
+    _filtered_values.clear();
+
     for (std::size_t pos = 0; pos < _values.get().size(); pos++)
     {
         auto const & s = _values.get()[pos];
