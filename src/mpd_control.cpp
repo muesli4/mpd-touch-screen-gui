@@ -145,7 +145,19 @@ void mpd_control::stop()
 
 void mpd_control::toggle_pause()
 {
-    add_external_task([](mpd_connection * c){ mpd_run_toggle_pause(c); });
+    add_external_task([](mpd_connection * c)
+    {
+        mpd_status * s = mpd_run_status(c);
+        mpd_state state = mpd_status_get_state(s);
+        if (state == MPD_STATE_UNKNOWN || state == MPD_STATE_STOP)
+        {
+            mpd_run_play(c);
+        }
+        else
+        {
+            mpd_run_toggle_pause(c);
+        }
+    });
 }
 
 void mpd_control::inc_volume(unsigned int amount)
