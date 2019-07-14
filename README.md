@@ -24,7 +24,15 @@ If you don't intend to run it on the same machine, you should set the MPD enviro
         ![search result](/example-images/search-result.png)
     * A final view allows shutting down and rebooting the machine.  
         ![shutdown](/example-images/shutdown.png)
-* A configurable UDP client allows basic UI controls (intended for use with an IR remote) in 6 directions (next and previous in x, y and natural order)
+* A configurable UDP client allows basic UI controls (intended for use with an IR remote) in 6 directions (next and previous in x, y and natural order):
+    ```
+    > ./mpd-touch-screen-gui-send 
+    Usage: ./mpd-touch-screen-gui-send CMD [SERVER [PORT]]
+    CMD    - One of: l, r, u, d, n, p, a
+    SERVER - Override config value for server.
+    PORT   - Override config value for port.
+    ```
+    To use the UDP interface, it has to be activated in the program config. The protocol is very simple and consists just of the letters.
 
 # Requirements
 
