@@ -66,7 +66,9 @@ void push_change_event(EventSender & es, Event e, T & old_val, T const & new_val
     }
 }
 
-// window closed, Ctrl + Q, etc.
+/**
+ * Was closing the window requested, Ctrl + Q pressed or anything similar?
+ */
 bool is_quit_event(SDL_Event const & ev)
 {
     return ev.type == SDL_QUIT
@@ -82,6 +84,20 @@ bool is_input_event(SDL_Event & ev)
            ev.type == SDL_KEYUP ||
            ev.type == SDL_FINGERDOWN ||
            ev.type == SDL_FINGERUP;
+}
+
+/**
+ * Should the screen be undimmed by this event?
+ */
+bool is_undim_event(SDL_Event & ev)
+{
+    if (ev.type == SDL_WINDOWEVENT)
+    {
+        uint32_t we = ev.window.event;
+        // Mouse moved inside the window.
+        return we == SDL_WINDOWEVENT_ENTER;
+    }
+    return true;
 }
 
 void refresh_current_playlist(std::vector<std::string> & cpl, unsigned int & cpv, mpd_control & mpdc)
@@ -448,20 +464,24 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                     {
                         if (dimmed)
                         {
-                            if (current_playlist_needs_refresh)
+                            if (is_undim_event(ev))
                             {
-                                refresh_current_playlist(cpl, cpv, mpdc);
-                                current_playlist_needs_refresh = false;
+                                if (current_playlist_needs_refresh)
+                                {
+                                    refresh_current_playlist(cpl, cpv, mpdc);
+                                    current_playlist_needs_refresh = false;
 
-                                playlist_v->set_position(0);
-                                search_v->on_playlist_changed();
+                                    playlist_v->set_position(0);
+                                    search_v->on_playlist_changed();
+                                }
+                                // ignore one event, turn on lights
+                                dimmed = false;
+                                // TODO run after drawing
+                                system(cfg.dim_idle_timer.undim_command.c_str());
+                                iti.sync();
+                                // TODO refactor into class
+                                SDL_AddTimer(std::chrono::milliseconds(cfg.dim_idle_timer.delay).count(), idle_timer_cb, &iti);
                             }
-                            // ignore one event, turn on lights
-                            dimmed = false;
-                            system(cfg.dim_idle_timer.undim_command.c_str());
-                            iti.sync();
-                            // TODO refactor into class
-                            SDL_AddTimer(std::chrono::milliseconds(cfg.dim_idle_timer.delay).count(), idle_timer_cb, &iti);
                         }
                         else
                         {
