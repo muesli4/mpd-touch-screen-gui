@@ -8,7 +8,7 @@ keypad::keypad(vec size, std::string keys, std::function<void(std::string)> subm
 }
 
 keypad::keypad(vec size, std::tuple<std::shared_ptr<text_button>, std::vector<grid::entry>> tmp)
-    : embedded_widget<grid>(vec{ std::max(size.w, 3), std::max(size.h, 0) + 1 }, std::get<1>(tmp), 5)
+    : embedded_widget<grid>(vec{ std::max(size.w, 3), std::max(size.h, 0) + 1 }, std::get<1>(tmp), 5, true)
     , _submit_button(std::get<0>(tmp))
 {
 }
