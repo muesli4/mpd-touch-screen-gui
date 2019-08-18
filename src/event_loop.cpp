@@ -35,6 +35,20 @@
 #include "cover_view.hpp"
 #include "search_view.hpp"
 
+
+// struct gui_view
+// {
+//     // e.g., load current cover
+//     virtual void on_wake_up() = 0;
+// 
+//     virtual void on_change_event(change_event_type type) = 0;
+// };
+// 
+// 
+// // use MVC
+// create models for state that proxies directly to MPD
+// views are asked which models they want to listen to (i.e. some context type where they can register themselves
+
 void handle_cover_swipe_direction(swipe_direction dir, mpd_control & mpdc, unsigned int volume_step)
 {
     switch (dir)
