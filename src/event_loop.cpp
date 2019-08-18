@@ -80,16 +80,6 @@ void push_change_event(EventSender & es, Event e, T & old_val, T const & new_val
     }
 }
 
-/**
- * Was closing the window requested, Ctrl + Q pressed or anything similar?
- */
-bool is_quit_event(SDL_Event const & ev)
-{
-    return ev.type == SDL_QUIT
-           || (ev.type == SDL_KEYDOWN && ev.key.keysym.mod & KMOD_CTRL && ev.key.keysym.sym == SDLK_q)
-           ;
-}
-
 bool is_input_event(SDL_Event & ev)
 {
     return ev.type == SDL_MOUSEBUTTONDOWN ||
