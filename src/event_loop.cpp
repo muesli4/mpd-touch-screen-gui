@@ -101,7 +101,17 @@ bool is_undim_event(SDL_Event & ev)
         // Mouse moved inside the window.
         return we == SDL_WINDOWEVENT_ENTER;
     }
-    return true;
+    else
+    {
+        // Duplicated events should be ignored.
+        bool const duplicate_touch_event =
+            (ev.type == SDL_MOUSEMOTION
+                && ev.motion.which == SDL_MOUSE_TOUCHID)
+             || ((ev.type == SDL_MOUSEBUTTONDOWN
+                  || ev.type == SDL_MOUSEBUTTONUP)
+                 && ev.button.which == SDL_MOUSE_TOUCHID);
+        return !duplicate_touch_event;
+    }
 }
 
 /**
