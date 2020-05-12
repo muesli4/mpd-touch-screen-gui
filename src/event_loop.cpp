@@ -104,7 +104,15 @@ bool is_undim_event(SDL_Event & ev)
     return true;
 }
 
-void refresh_current_playlist(std::vector<std::string> & cpl, unsigned int & cpv, mpd_control & mpdc)
+/**
+ * Refresh the current playlist by destructively updating the current state.
+ *
+ */
+void refresh_current_playlist
+    ( std::vector<std::string> & cpl
+    , unsigned int & cpv
+    , mpd_control & mpdc
+    )
 {
     playlist_change_info pci = mpdc.get_current_playlist_changes(cpv);
     cpl.resize(pci.new_length);
