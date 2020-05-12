@@ -438,7 +438,10 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                             {
                                 refresh_current_playlist(cpl, cpv, mpdc);
 
-                                playlist_v->set_position(0);
+                                if (current_song_pos >= cpl.size())
+                                {
+                                    playlist_v->set_position(0);
+                                }
                                 search_v->on_playlist_changed();
                             }
                             break;
@@ -475,6 +478,10 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                                     refresh_current_playlist(cpl, cpv, mpdc);
                                     current_playlist_needs_refresh = false;
 
+                                    if (current_song_pos >= cpl.size())
+                                    {
+                                        playlist_v->set_position(0);
+                                    }
                                     playlist_v->set_position(0);
                                     search_v->on_playlist_changed();
                                 }
