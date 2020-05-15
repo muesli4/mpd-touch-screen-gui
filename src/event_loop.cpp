@@ -94,6 +94,16 @@ bool is_input_event(SDL_Event & ev)
            ev.type == SDL_FINGERUP;
 }
 
+bool is_duplicate_touch_finger_event(SDL_Event & ev)
+{
+    bool const duplicate_motion =
+        ev.type == SDL_MOUSEMOTION && ev.motion.which == SDL_MOUSE_TOUCHID;
+    bool const duplicate_button =
+        (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP)
+        && ev.button.which == SDL_MOUSE_TOUCHID;
+    return duplicate_motion || duplicate_button;
+}
+
 /**
  * Should the screen be undimmed by this event?
  */
@@ -107,14 +117,10 @@ bool is_undim_event(SDL_Event & ev)
     }
     else
     {
-        // Duplicated events should be ignored.
-        bool const duplicate_touch_event =
-            (ev.type == SDL_MOUSEMOTION
-                && ev.motion.which == SDL_MOUSE_TOUCHID)
-             || ((ev.type == SDL_MOUSEBUTTONDOWN
-                  || ev.type == SDL_MOUSEBUTTONUP)
-                 && ev.button.which == SDL_MOUSE_TOUCHID);
-        return !duplicate_touch_event;
+        // Ignore any down events because the up event will follow later.
+        return !(ev.type == SDL_MOUSEBUTTONDOWN
+                 || ev.type == SDL_FINGERDOWN
+                 || is_duplicate_touch_finger_event(ev));
     }
 }
 
