@@ -24,7 +24,6 @@ std::chrono::milliseconds idle_timer_info::remaining_ms()
     return duration_cast<milliseconds>(_last_activity_tp - _start_tp);
 }
 
-#include <iostream>
 std::chrono::milliseconds idle_timer_info::callback()
 {
     auto rem_ms = remaining_ms();
