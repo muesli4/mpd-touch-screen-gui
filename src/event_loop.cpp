@@ -35,6 +35,10 @@
 #include "cover_view.hpp"
 #include "search_view.hpp"
 
+// Allow debugging from build directory and avoid errors.
+#ifndef ICONDIR
+#define ICONDIR "../data/icons/"
+#endif
 
 // struct gui_view
 // {
