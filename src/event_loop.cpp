@@ -208,7 +208,7 @@ enum class change_event_type
 
 void handle_other_event(SDL_Event const & e, widget_context & ctx, navigation_event_sender const & nes)
 {
-    if (nes.is_event_type(e.user.type))
+    if (nes.is_event_type(e.type))
     {
         navigation_event ne;
         nes.read(e, ne);
@@ -368,8 +368,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     if (cfg.opt_port.has_value())
     {
         opt_udp_control.emplace(cfg.opt_port.value(), nes);
-        std::thread t { &udp_control::run, std::ref(opt_udp_control.value()) };
-        udp_thread.swap(t);
+        udp_thread = std::thread { &udp_control::run, std::ref(opt_udp_control.value()) };
     }
 
     try
@@ -392,10 +391,10 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
 
         auto view_box = std::make_shared<notebook>(
             std::vector<widget_ptr>{ cv
-                                , add_list_view_controls(renderer, playlist_v, ICONDIR "jump_to_arrow.png", [=, &current_song_pos](){ playlist_v->set_position(current_song_pos); })
-                                , search_v
-                                , make_shutdown_view(result, run)
-                                });
+                                   , add_list_view_controls(renderer, playlist_v, ICONDIR "jump_to_arrow.png", [=, &current_song_pos](){ playlist_v->set_position(current_song_pos); })
+                                   , search_v
+                                   , make_shutdown_view(result, run)
+                                   });
 
         // side bar button controls
         auto random_button =
