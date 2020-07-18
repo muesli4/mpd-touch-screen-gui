@@ -98,10 +98,10 @@ bool is_input_event(SDL_Event & ev)
 bool is_duplicate_touch_finger_event(SDL_Event & ev)
 {
     bool const duplicate_motion =
-        ev.type == SDL_MOUSEMOTION && ev.motion.which == SDL_MOUSE_TOUCHID;
+        ev.type == SDL_MOUSEMOTION && ev.motion.which == SDL_TOUCH_MOUSEID;
     bool const duplicate_button =
         (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP)
-        && ev.button.which == SDL_MOUSE_TOUCHID;
+        && ev.button.which == SDL_TOUCH_MOUSEID;
     return duplicate_motion || duplicate_button;
 }
 
@@ -116,12 +116,14 @@ bool is_undim_event(SDL_Event & ev)
         // Mouse moved inside the window.
         return we == SDL_WINDOWEVENT_ENTER;
     }
+    // Ignore any down events because the up event will follow later.
+    else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_FINGERDOWN)
+    {
+        return false;
+    }
     else
     {
-        // Ignore any down events because the up event will follow later.
-        return !(ev.type == SDL_MOUSEBUTTONDOWN
-                 || ev.type == SDL_FINGERDOWN
-                 || is_duplicate_touch_finger_event(ev));
+        return !is_duplicate_touch_finger_event(ev);
     }
 }
 
