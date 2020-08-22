@@ -40,12 +40,20 @@ If you don't intend to run it on the same machine, you should set the MPD enviro
 * `SDL2_image` (cover image loading)
 * `sdl2` (rendering)
 * `libmpdclient` (communication with MPD instance)
-* `icu-uc` (lower-case conversion for case insensitive search)
+* `icu` (sometimes named `icu-uc` / `icu` / `libicu` - use lower-case conversion for case insensitive search)
 * `boost_filesystem`
 * `boost_system`
 * `boost_asio` (UDP interface for remote navigation)
-* `libwtk-sdl2` (widgets)
-* C++17
+* [`libwtk-sdl2`](../../../libwtk-sdl2) (widgets)
+* [libconfig](https://www.hyperrealm.com/libconfig/libconfig.html)
+
+## Additional Build Requirements
+
+These are only required on the host:
+
+* C++17 compiler such as `gcc`
+* `pkg-config`
+* `autoconf` & `automake` & `libtool`
 
 # Installation
 
