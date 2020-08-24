@@ -47,9 +47,9 @@ If you don't intend to run it on the same machine, you should set the MPD enviro
 * [`libwtk-sdl2`](../../../libwtk-sdl2) (widgets)
 * [libconfig](https://www.hyperrealm.com/libconfig/libconfig.html)
 
-## Native (host machine) Requirements
+## Build (Host only) Requirements
 
-* C++17 compiler such as Gcc
+* C++17 compiler such as `gcc`
 * `pkg-config`
 * `autoconf` & `automake` & `libtool`
 
