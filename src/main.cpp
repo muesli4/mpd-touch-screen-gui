@@ -82,7 +82,8 @@ quit_action program(program_config const & cfg)
 
     try
     {
-         result = event_loop(renderer, cfg);
+        event_loop el;
+        result = el.run(renderer, cfg);
     }
     catch (std::exception const & e)
     {

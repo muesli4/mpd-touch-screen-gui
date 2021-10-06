@@ -209,12 +209,12 @@ enum class change_event_type
     PLAYBACK_STATE_CHANGED
 };
 
-void handle_other_event(SDL_Event const & e, widget_context & ctx, std::shared_ptr<list_view> lv, navigation_event_sender const & nes)
+void event_loop::handle_other_event(SDL_Event const & e, widget_context & ctx, std::shared_ptr<list_view> lv)
 {
-    if (nes.is_event_type(e.type))
+    if (_nes.is_event_type(e.type))
     {
         navigation_event ne;
-        nes.read(e, ne);
+        _nes.read(e, ne);
         if (ne.type == navigation_event_type::NAVIGATION)
         {
             ctx.navigate_selection(ne.nt);
@@ -245,7 +245,7 @@ widget_ptr make_shutdown_view(quit_action & result, bool & run)
                 }, 5, true);
 }
 
-quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
+quit_action event_loop::run(SDL_Renderer * renderer, program_config const & cfg)
 {
     quit_action result = quit_action::NONE;
 
@@ -265,7 +265,6 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     // Set up user events.
     enum_user_event_sender<change_event_type> ces;
     enum_user_event_sender<idle_timer_event_type> tes;
-    navigation_event_sender nes;
 
     idle_timer_info iti(tes);
     bool dimmed = false;
@@ -311,7 +310,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
     std::thread udp_thread;
     if (cfg.opt_port.has_value())
     {
-        opt_udp_control.emplace(cfg.opt_port.value(), nes);
+        opt_udp_control.emplace(cfg.opt_port.value(), _nes);
         udp_thread = std::thread { &udp_control::run, std::ref(opt_udp_control.value()) };
     }
 
@@ -386,7 +385,7 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                 run = false;
             }
             // most of the events are not required for a standalone fullscreen application
-            else if (is_input_event(ev) || nes.is_event_type(ev.type)
+            else if (is_input_event(ev) || _nes.is_event_type(ev.type)
                                         || ces.is_event_type(ev.type)
                                         || tes.is_event_type(ev.type)
                                         || ev.type == SDL_WINDOWEVENT
