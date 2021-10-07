@@ -64,6 +64,17 @@ void generic_user_event_sender::read_with_payload(SDL_Event const & e, T & t, P 
     p = static_cast<P>(tmp);
 }
 
+struct simple_event_sender
+{
+    bool is_event_type(uint32_t event_type) const;
+
+    void push() const;
+
+    private:
+
+    generic_user_event_sender _gues;
+};
+
 template <typename T>
 class enum_user_event_sender
 {

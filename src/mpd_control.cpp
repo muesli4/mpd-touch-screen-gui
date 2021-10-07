@@ -216,6 +216,22 @@ bool mpd_control::get_random()
     });
 }
 
+mpd_state mpd_control::get_state()
+{
+    return add_external_task_with_return<mpd_state>([](mpd_connection * c){
+        mpd_status * s = mpd_run_status(c);
+        mpd_state v = mpd_status_get_state(s);
+        mpd_status_free(s);
+        return v;
+    });
+}
+
+void mpd_control::toggle_random()
+{
+    bool random = get_random();
+    set_random(!random);
+}
+
 std::string mpd_control::get_current_title()
 {
     return get_current_tag(MPD_TAG_TITLE);

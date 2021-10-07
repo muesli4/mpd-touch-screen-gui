@@ -25,13 +25,14 @@
 #include <libwtk-sdl2/widget_context.hpp>
 
 #include "idle_timer.hpp"
-#include "mpd_control.hpp"
 #include "navigation_event.hpp"
 #include "udp_control.hpp"
 #include "user_event.hpp"
 #include "util.hpp"
 #include "widget_util.hpp"
 #include "enum_texture_button.hpp"
+#include "player_view.hpp"
+#include "player_gui.hpp"
 
 #include "cover_view.hpp"
 #include "search_view.hpp"
@@ -53,27 +54,6 @@
 // // use MVC
 // create models for state that proxies directly to MPD
 // views are asked which models they want to listen to (i.e. some context type where they can register themselves
-
-void handle_cover_swipe_direction(swipe_direction dir, mpd_control & mpdc, unsigned int volume_step)
-{
-    switch (dir)
-    {
-        case swipe_direction::UP:
-            mpdc.inc_volume(volume_step);
-            break;
-        case swipe_direction::DOWN:
-            mpdc.dec_volume(volume_step);
-            break;
-        case swipe_direction::RIGHT:
-            mpdc.next_song();
-            break;
-        case swipe_direction::LEFT:
-            mpdc.prev_song();
-            break;
-        default:
-            break;
-    }
-}
 
 template <typename T, typename EventSender, typename Event>
 void push_change_event(EventSender & es, Event e, T & old_val, T const & new_val)
@@ -201,82 +181,34 @@ struct model_event_handler : callback_handler<playback_status_function>, callbac
 };
 */
 
-enum class change_event_type
-{
-    RANDOM_CHANGED,
-    SONG_CHANGED,
-    PLAYLIST_CHANGED,
-    PLAYBACK_STATE_CHANGED
-};
-
-void event_loop::handle_other_event(SDL_Event const & e, widget_context & ctx, std::shared_ptr<list_view> lv)
+void event_loop::handle_other_event(SDL_Event const & e)
 {
     if (_nes.is_event_type(e.type))
     {
         navigation_event ne;
         _nes.read(e, ne);
-        if (ne.type == navigation_event_type::NAVIGATION)
-        {
-            ctx.navigate_selection(ne.nt);
-        }
-        else if (ne.type == navigation_event_type::ACTIVATE)
-        {
-            ctx.activate();
-        }
-        else if (ne.type == navigation_event_type::SCROLL_UP)
-        {
-            lv->scroll_up(1);
-        }
-        else if (ne.type == navigation_event_type::SCROLL_DOWN)
-        {
-            lv->scroll_down(1);
-        }
+        _player_view->on_navigation_event(ne);
     }
     else
     {
-        ctx.process_event(e);
+        _player_view->on_other_event(e);
     }
 }
 
-widget_ptr make_shutdown_view(quit_action & result, bool & run)
+void event_loop::add_user_event(std::function<void()> && f)
 {
-    return vbox({ { false, std::make_shared<text_button>("Shutdown", [&run, &result](){ result = quit_action::SHUTDOWN; run = false; }) }
-                , { false, std::make_shared<text_button>("Reboot", [&run, &result](){ result = quit_action::REBOOT; run = false; }) }
-                }, 5, true);
+    std::scoped_lock const lock(_user_event_queue_mutex);
+    _user_event_queue.emplace(f);
+    _change_event_sender.push();
 }
 
-quit_action event_loop::run(SDL_Renderer * renderer, program_config const & cfg)
-{
-    quit_action result = quit_action::NONE;
+event_loop::event_loop(SDL_Renderer * renderer, program_config const & cfg)
+    : _playlist()
+    , _current_song_pos(0)
+    , _refresh_cover(true)
+    , _dimmed(false)
 
-    // loop state
-    std::string current_song_path;
-
-    bool random;
-    mpd_state playback_state = MPD_STATE_UNKNOWN;
-
-    unsigned int current_song_pos = 0;
-    std::vector<std::string> cpl;
-    unsigned int cpv;
-
-    bool refresh_cover = true;
-    bool current_playlist_needs_refresh = false;
-
-    // Set up user events.
-    enum_user_event_sender<change_event_type> ces;
-    enum_user_event_sender<idle_timer_event_type> tes;
-
-    idle_timer_info iti(tes);
-    bool dimmed = false;
-
-    // timer is enabled
-    if (idle_timer_enabled(cfg))
-    {
-        // act as if the timer expired and it should dim now
-        tes.push(idle_timer_event_type::IDLE_TIMER_EXPIRED);
-    }
-
-    mpd_control mpdc(
+    , _mpd_control(
         [&](std::optional<song_location> opt_sl)
         {
             // TODO probably move, as string copy might not be atomic
@@ -285,26 +217,71 @@ quit_action event_loop::run(SDL_Renderer * renderer, program_config const & cfg)
             if (opt_sl.has_value())
             {
                 auto const & sl = opt_sl.value();
-                current_song_path = sl.path;
-                current_song_pos = sl.pos;
+                _current_song_path = sl.path;
+                _current_song_pos = sl.pos;
             }
 
-            ces.push(change_event_type::SONG_CHANGED);
+            add_user_event([&]()
+            {
+                _refresh_cover = true;
+                _player_view->on_song_changed(_current_song_pos);
+            });
         },
         [&](bool value)
         {
-            push_change_event(ces, change_event_type::RANDOM_CHANGED, random, value);
+            add_user_event([&, value]()
+            {
+                _player_view->on_random_changed(value);
+            });
         },
         [&]()
         {
-            ces.push(change_event_type::PLAYLIST_CHANGED);
+            add_user_event([&]()
+            {
+                if (_dimmed)
+                {
+                    _current_playlist_needs_refresh = true;
+                }
+                else
+                {
+                    refresh_current_playlist(_playlist, _current_playlist_version, _mpd_control);
+                    _player_view->on_playlist_changed(_current_song_pos >= _playlist.size());
+                }
+            });
         },
         [&](mpd_state state)
         {
-            push_change_event(ces, change_event_type::PLAYBACK_STATE_CHANGED, playback_state, state);
-        }
-    );
-    std::thread mpdc_thread(&mpd_control::run, std::ref(mpdc));
+            add_user_event([&, state]()
+            {
+                _player_view->on_playback_state_changed(state);
+            });
+        })
+    , _model(_mpd_control)
+    , _player_view(std::make_unique<player_gui>(renderer, _model, _playlist, _current_song_pos, cfg))
+{
+    // TODO not clear why this is needed, something is locking up here otherwise
+    add_user_event([&]()
+    {
+        _player_view->on_random_changed(_mpd_control.get_random());
+        _player_view->on_playback_state_changed(_mpd_control.get_state());
+    });
+}
+
+quit_action event_loop::run(program_config const & cfg)
+{
+    // Set up user events.
+    enum_user_event_sender<idle_timer_event_type> tes;
+
+    idle_timer_info iti(tes);
+
+    // timer is enabled
+    if (idle_timer_enabled(cfg))
+    {
+        // act as if the timer expired and it should dim now
+        tes.push(idle_timer_event_type::IDLE_TIMER_EXPIRED);
+    }
+
+    std::thread mpdc_thread(&mpd_control::run, std::ref(_mpd_control));
 
     std::optional<udp_control> opt_udp_control;
     std::thread udp_thread;
@@ -316,122 +293,46 @@ quit_action event_loop::run(SDL_Renderer * renderer, program_config const & cfg)
 
     try
     {
-
         // get initial state from mpd
-        std::tie(cpl, cpv) = mpdc.get_current_playlist();
-        random = mpdc.get_random();
+        std::tie(_playlist, _current_playlist_version) = _mpd_control.get_current_playlist();
+
         // TODO ask mpd state!
 
-        bool run = true;
         SDL_Event ev;
 
         // TODO move to MVC
 
-        // construct views
-        auto cv = std::make_shared<cover_view>([&](swipe_direction dir){ handle_cover_swipe_direction(dir, mpdc, 5); }, [&](){ mpdc.toggle_pause(); });
-        auto playlist_v = std::make_shared<list_view>(cpl, current_song_pos, [&mpdc](std::size_t pos){ mpdc.play_position(pos); });
-        auto search_v = std::make_shared<search_view>(renderer, cfg.on_screen_keyboard.size, cfg.on_screen_keyboard.keys, cpl, [&](auto pos){ mpdc.play_position(pos); });
-
-        auto view_box = std::make_shared<notebook>(
-            std::vector<widget_ptr>{ cv
-                                   , add_list_view_controls(renderer, playlist_v, ICONDIR "jump_to_arrow.png", [=, &current_song_pos](){ playlist_v->set_position(current_song_pos); })
-                                   , search_v
-                                   , make_shutdown_view(result, run)
-                                   });
-
-        // side bar button controls
-        auto random_button =
-            make_enum_texture_button<bool, 2>( renderer
-                                             , random
-                                             , { ICONDIR "random_on.png"
-                                               , ICONDIR "random_off.png"
-                                               }
-                                             , [&](){ mpdc.set_random(!random); }
-                                             );
-        auto play_button =
-            make_enum_texture_button<mpd_state, 4>( renderer
-                                                  , playback_state
-                                                  , { ICONDIR "play.png"
-                                                    , ICONDIR "play.png"
-                                                    , ICONDIR "pause.png"
-                                                    , ICONDIR "play.png"
-                                                    }
-                                                  , [&](){ mpdc.toggle_pause(); }
-                                                  );
-
-        auto button_controls = vbox(
-                { { false, make_texture_button(renderer, ICONDIR "apps.png", [&](){ view_box->set_page((view_box->get_page() + 1) % 4);  }) }
-                , { false, play_button }
-                , { false, random_button }
-                }, 5, true);
-
-        box main_widget
-            ( box::orientation::HORIZONTAL
-            , { { false, pad_right(-5, pad(5, button_controls)) }
-            , { true, pad(5, view_box) }
-            }
-            , 0
-            );
-
-        // TODO add dir_unambig_factor_threshold from config
-        widget_context ctx(renderer, { cfg.default_font, cfg.big_font }, main_widget);
-        ctx.draw();
-
-        while (run && SDL_WaitEvent(&ev) == 1)
+        while (!_model.is_finished() && SDL_WaitEvent(&ev) == 1)
         {
             if (is_quit_event(ev))
             {
                 std::cout << "Requested quit" << std::endl;
-                run = false;
+                _model.quit();
             }
             // most of the events are not required for a standalone fullscreen application
             else if (is_input_event(ev) || _nes.is_event_type(ev.type)
-                                        || ces.is_event_type(ev.type)
+                                        || _change_event_sender.is_event_type(ev.type)
                                         || tes.is_event_type(ev.type)
                                         || ev.type == SDL_WINDOWEVENT
                     )
             {
                 // handle asynchronous user events synchronously
-                if (ces.is_event_type(ev.type))
+                if (_change_event_sender.is_event_type(ev.type))
                 {
-                    switch (ces.read(ev))
+                    std::scoped_lock const lock(_user_event_queue_mutex);
+                    while (!_user_event_queue.empty())
                     {
-                        case change_event_type::SONG_CHANGED:
-                            refresh_cover = true;
-                            playlist_v->set_highlight_position(current_song_pos);
-                            search_v->set_filtered_highlight_position(current_song_pos);
-                            break;
-                        case change_event_type::PLAYLIST_CHANGED:
-                            if (dimmed)
-                                current_playlist_needs_refresh = true;
-                            else
-                            {
-                                refresh_current_playlist(cpl, cpv, mpdc);
-
-                                if (current_song_pos >= cpl.size())
-                                {
-                                    playlist_v->set_position(0);
-                                }
-                                search_v->on_playlist_changed();
-                            }
-                            break;
-                        case change_event_type::RANDOM_CHANGED:
-                            random_button->set_state(random);
-                            break;
-                        case change_event_type::PLAYBACK_STATE_CHANGED:
-                            play_button->set_state(playback_state);
-                            break;
-                        default:
-                            break;
+                        _user_event_queue.front()();
+                        _user_event_queue.pop();
                     }
 
-                    if (dimmed)
+                    if (_dimmed)
                         continue;
                 }
                 // dim idle timer expired
                 else if (tes.is_event_type(ev.type))
                 {
-                    dimmed = true;
+                    _dimmed = true;
                     system(cfg.dim_idle_timer.dim_command.c_str());
                     continue;
                 }
@@ -439,24 +340,18 @@ quit_action event_loop::run(SDL_Renderer * renderer, program_config const & cfg)
                 {
                     if (idle_timer_enabled(cfg))
                     {
-                        if (dimmed)
+                        if (_dimmed)
                         {
                             if (is_undim_event(ev))
                             {
-                                if (current_playlist_needs_refresh)
+                                if (_current_playlist_needs_refresh)
                                 {
-                                    refresh_current_playlist(cpl, cpv, mpdc);
-                                    current_playlist_needs_refresh = false;
-
-                                    if (current_song_pos >= cpl.size())
-                                    {
-                                        playlist_v->set_position(0);
-                                    }
-                                    playlist_v->set_position(0);
-                                    search_v->on_playlist_changed();
+                                    refresh_current_playlist(_playlist, _current_playlist_version, _mpd_control);
+                                    _current_playlist_needs_refresh = false;
+                                    _player_view->on_playlist_changed(_current_song_pos >= _playlist.size());
                                 }
                                 // ignore one event, turn on lights
-                                dimmed = false;
+                                _dimmed = false;
                                 // TODO run after drawing
                                 system(cfg.dim_idle_timer.undim_command.c_str());
                                 iti.sync();
@@ -467,27 +362,27 @@ quit_action event_loop::run(SDL_Renderer * renderer, program_config const & cfg)
                         else
                         {
                             iti.signal_user_activity();
-                            handle_other_event(ev, ctx, playlist_v, nes);
+                            handle_other_event(ev);
                         }
                     }
                     else
                     {
-                        handle_other_event(ev, ctx, playlist_v, nes);
+                        handle_other_event(ev);
                     }
                 }
 
                 // Avoid unnecessary I/O on slower devices.
-                if (refresh_cover)
+                if (_refresh_cover)
                 {
                     cover_type ct;
                     if (cfg.cover.opt_directory.has_value())
                     {
-                        auto opt_cover_path = find_cover_file(current_song_path, cfg.cover.opt_directory.value(), cfg.cover.names, cfg.cover.extensions);
+                        auto opt_cover_path = find_cover_file(_current_song_path, cfg.cover.opt_directory.value(), cfg.cover.names, cfg.cover.extensions);
 
                         if (opt_cover_path.has_value())
                         {
                             ct = cover_type::IMAGE;
-                            cv->set_cover(std::move(load_texture_from_image(renderer, opt_cover_path.value())));
+                            _player_view->on_cover_updated(opt_cover_path.value());
                         }
                         else
                         {
@@ -501,12 +396,15 @@ quit_action event_loop::run(SDL_Renderer * renderer, program_config const & cfg)
 
                     if (ct == cover_type::SONG_INFO)
                     {
-                        cv->set_cover(mpdc.get_current_title(), mpdc.get_current_artist(), mpdc.get_current_album());
+                        _player_view->on_cover_updated( _mpd_control.get_current_title()
+                                                      , _mpd_control.get_current_artist()
+                                                      , _mpd_control.get_current_album()
+                                                      );
                     }
-                    refresh_cover = false;
+                    _refresh_cover = false;
                 }
 
-                ctx.draw_dirty();
+                _player_view->on_draw_dirty_event();
             }
         }
     }
@@ -515,7 +413,7 @@ quit_action event_loop::run(SDL_Renderer * renderer, program_config const & cfg)
         std::cerr << e.what() << std::endl;
     }
 
-    mpdc.stop();
+    _mpd_control.stop();
     mpdc_thread.join();
 
     if (cfg.opt_port.has_value())
@@ -524,6 +422,6 @@ quit_action event_loop::run(SDL_Renderer * renderer, program_config const & cfg)
         udp_thread.join();
     }
 
-    return result;
+    return _model.get_quit_action();
 }
 

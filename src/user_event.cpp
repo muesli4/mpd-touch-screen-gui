@@ -48,3 +48,12 @@ void generic_user_event_sender::push_int_with_payload(int code, int data1) const
     }
 }
 
+bool simple_event_sender::is_event_type(uint32_t event_type) const
+{
+    return _gues.is_event_type(event_type);
+}
+
+void simple_event_sender::push() const
+{
+    return _gues.push(0);
+}
