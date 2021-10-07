@@ -57,8 +57,10 @@ struct mpd_control
     void play_position(int pos);
 
     void set_random(bool value);
-
     bool get_random();
+    void toggle_random();
+
+    mpd_state get_state();
 
     std::string get_current_title();
     std::string get_current_artist();

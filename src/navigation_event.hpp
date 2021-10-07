@@ -9,7 +9,8 @@
 enum class navigation_event_type
 {
     NAVIGATION,
-    ACTIVATE
+    ACTIVATE,
+    MENU
 };
 
 struct navigation_event
