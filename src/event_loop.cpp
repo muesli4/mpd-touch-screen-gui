@@ -209,7 +209,7 @@ enum class change_event_type
     PLAYBACK_STATE_CHANGED
 };
 
-void handle_other_event(SDL_Event const & e, widget_context & ctx, navigation_event_sender const & nes)
+void handle_other_event(SDL_Event const & e, widget_context & ctx, std::shared_ptr<list_view> lv, navigation_event_sender const & nes)
 {
     if (nes.is_event_type(e.type))
     {
@@ -219,9 +219,17 @@ void handle_other_event(SDL_Event const & e, widget_context & ctx, navigation_ev
         {
             ctx.navigate_selection(ne.nt);
         }
-        else
+        else if (ne.type == navigation_event_type::ACTIVATE)
         {
             ctx.activate();
+        }
+        else if (ne.type == navigation_event_type::SCROLL_UP)
+        {
+            lv->scroll_up(1);
+        }
+        else if (ne.type == navigation_event_type::SCROLL_DOWN)
+        {
+            lv->scroll_down(1);
         }
     }
     else
@@ -460,12 +468,12 @@ quit_action event_loop(SDL_Renderer * renderer, program_config const & cfg)
                         else
                         {
                             iti.signal_user_activity();
-                            handle_other_event(ev, ctx, nes);
+                            handle_other_event(ev, ctx, playlist_v, nes);
                         }
                     }
                     else
                     {
-                        handle_other_event(ev, ctx, nes);
+                        handle_other_event(ev, ctx, playlist_v, nes);
                     }
                 }
 

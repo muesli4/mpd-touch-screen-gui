@@ -9,7 +9,9 @@
 enum class navigation_event_type
 {
     NAVIGATION,
-    ACTIVATE
+    ACTIVATE,
+    SCROLL_UP,
+    SCROLL_DOWN
 };
 
 struct navigation_event
