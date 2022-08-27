@@ -28,7 +28,7 @@ If you don't intend to run it on the same machine, you should set the MPD enviro
     ```
     > ./mpd-touch-screen-gui-send 
     Usage: ./mpd-touch-screen-gui-send CMD [SERVER [PORT]]
-    CMD    - One of: l, r, u, d, n, p, a
+    CMD    - One of: l, r, u, d, n, p, a, <, >
     SERVER - Override config value for server.
     PORT   - Override config value for port.
     ```

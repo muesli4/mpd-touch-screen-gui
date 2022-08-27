@@ -52,7 +52,7 @@ int main(int argc, char ** argv)
     if (argc < 2)
     {
         std::cerr << "Usage: " << argv[0] << " CMD [SERVER [PORT]]\n"
-                     "    CMD    - One of: l, r, u, d, n, p, a\n"
+                     "    CMD    - One of: l, r, u, d, n, p, a, <, >\n"
                      "    SERVER - Override config value for server.\n"
                      "    PORT   - Override config value for port." << std::endl;
     }
