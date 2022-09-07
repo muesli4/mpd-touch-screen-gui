@@ -67,6 +67,7 @@ void udp_control::handle_receive(boost::system::error_code const & ec, std::size
                 case 'a': ne.type = navigation_event_type::ACTIVATE; break;
                 case '>': ne.type = navigation_event_type::SCROLL_DOWN; break;
                 case '<': ne.type = navigation_event_type::SCROLL_UP; break;
+                case 'm': ne.type = navigation_event_type::MENU; break;
                 default:
                     output_error(std::string("Invalid command: ") + _c);
                     return;

@@ -18,6 +18,11 @@ widget_ptr player_gui::make_shutdown_view()
                  }, 5, true);
 }
 
+void player_gui::advance_view()
+{
+    _view_ptr->set_page((_view_ptr->get_page() + 1) % 4);
+}
+
 player_gui::player_gui(SDL_Renderer * renderer, player_model & model, std::vector<std::string> & playlist, unsigned int & current_song_pos, program_config const & cfg)
     : _renderer(renderer)
     , _model(model)
@@ -60,7 +65,7 @@ player_gui::player_gui(SDL_Renderer * renderer, player_model & model, std::vecto
                   , { { false, pad_right(-5, pad( 5
                                                 , vbox({ { false, make_texture_button( renderer
                                                                                      , ICONDIR "apps.png"
-                                                                                     , [&](){ _view_ptr->set_page((_view_ptr->get_page() + 1) % 4);  }
+                                                                                     , [&](){ advance_view(); }
                                                                                      ) }
                                                        , { false, _play_button_ptr }
                                                        , { false, _random_button_ptr }
@@ -150,6 +155,10 @@ void player_gui::on_navigation_event(navigation_event const & ne)
     else if (ne.type == navigation_event_type::SCROLL_DOWN)
     {
         _playlist_view_ptr->scroll_down(1);
+    }
+    else if (ne.type == navigation_event_type::MENU)
+    {
+        advance_view();
     }
 }
 

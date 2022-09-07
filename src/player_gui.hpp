@@ -36,6 +36,8 @@ struct player_gui : player_view
 
     widget_ptr make_shutdown_view();
 
+    void advance_view();
+
     SDL_Renderer * _renderer;
     player_model & _model;
 
