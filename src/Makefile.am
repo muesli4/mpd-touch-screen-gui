@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Moritz Bruder <muesli4 at gmail dot com>
+#
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 # TODO add those flags
 #debug: CXXFLAGS += '-ggdb' '-O0'
 #opt:   CXXFLAGS += '-O2'

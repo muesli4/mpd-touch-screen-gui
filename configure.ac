@@ -1,3 +1,7 @@
+dnl SPDX-FileCopyrightText: Moritz Bruder <muesli4 at gmail dot com>
+dnl
+dnl SPDX-License-Identifier: LGPL-3.0-or-later
+
 AC_INIT([mpd-touch-screen-gui], [0.0.1], [muesli4@gmail.com])
 
 #AC_CONFIG_SRCDIR([src/config.h.in])

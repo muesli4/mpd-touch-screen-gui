@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: mpd-touch-screen-gui
+Upstream-Contact: Moritz Bruder <muesli4 at gmail dot com>
+Source: https://github.com/muesli4/mpd-touch-screen-gui
+
+# Sample paragraph, commented out:
+#
+# Files: src/*
+# Copyright: $YEAR $NAME <$CONTACT>
+# License: ...

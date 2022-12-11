@@ -1,3 +1,10 @@
+<!--
+SPDX-FileCopyrightText: 2020 - 2022 Doron Behar
+SPDX-FileCopyrightText: Moritz Bruder <muesli4 at gmail dot com>
+
+SPDX-License-Identifier: LGPL-3.0-or-later
+-->
+
 # Usage
 
 The goal of this project is to provide a graphical application suited for a dedicated player based on MPD.

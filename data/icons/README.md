@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Moritz Bruder <muesli4 at gmail dot com>
+
+SPDX-License-Identifier: LGPL-3.0-or-later
+-->
+
 These icons are part of the Material Design project by Google. They are available under the apache license version 2.0.
 
 More information can be found under:

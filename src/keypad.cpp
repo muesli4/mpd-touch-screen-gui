@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: Moritz Bruder <muesli4 at gmail dot com>
+//
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #include <libwtk-sdl2/utf8.hpp>
 #include "util.hpp"
 #include "keypad.hpp"

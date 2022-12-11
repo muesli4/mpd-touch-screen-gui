@@ -1,3 +1,8 @@
+dnl SPDX-FileCopyrightText: 2008 Pete Greenwell <pete@mu.org>
+dnl SPDX-FileCopyrightText: 2008 Thomas Porschberg <thomas@randspringer.de>
+dnl
+dnl SPDX-License-Identifier: FSFAP
+
 # ===========================================================================
 #      https://www.gnu.org/software/autoconf-archive/ax_boost_base.html
 # ===========================================================================
