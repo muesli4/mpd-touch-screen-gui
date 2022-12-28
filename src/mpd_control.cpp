@@ -254,11 +254,17 @@ std::string format_playlist_song(mpd_song * s)
 {
     char const * artist = mpd_song_get_tag(s, MPD_TAG_ARTIST, 0);
     if (artist == nullptr)
+    {
         artist = mpd_song_get_tag(s, MPD_TAG_ALBUM_ARTIST, 0);
-    if (artist == nullptr)
-        artist = mpd_song_get_tag(s, MPD_TAG_COMPOSER, 0);
+        if (artist == nullptr)
+        {
+            artist = mpd_song_get_tag(s, MPD_TAG_COMPOSER, 0);
+        }
+    }
     if (artist != nullptr && std::strcmp(artist, "Various Artists") == 0)
+    {
         artist = nullptr;
+    }
 
     return (artist == nullptr ? "" : std::string(artist) + " - ")
            + string_from_ptr(mpd_song_get_tag(s, MPD_TAG_TITLE, 0));
