@@ -4,7 +4,6 @@
 
 #include <chrono>
 #include <thread>
-#include <memory>
 #include <cstring>
 
 #include "mpd_control.hpp"
@@ -316,23 +315,14 @@ playlist_change_info mpd_control::get_current_playlist_changes(unsigned int vers
 
 std::string mpd_control::get_current_tag(enum mpd_tag_type type)
 {
-    typedef std::promise<std::string> promise_type;
-    auto promise_ptr = std::make_shared<promise_type>();
+    std::promise<std::string> promise;
 
     {
         scoped_lock lock(_external_song_queries_mutex);
-        _external_song_queries.push_back([type, promise_ptr](mpd_connection * c, mpd_song * s)
+        _external_song_queries.push_back([type, &promise](mpd_connection * c, mpd_song * s)
         {
-            if (s != nullptr)
-            {
-                char const * const cstr = mpd_song_get_tag(s, type, 0);
-                promise_ptr->set_value(string_from_ptr(cstr));
-            }
-            else
-            {
-                promise_ptr->set_value("");
-            }
-
+            std::string const value = s != nullptr ? string_from_ptr(mpd_song_get_tag(s, type, 0)) : "";
+            promise.set_value(value);
         }
         );
     }
@@ -341,7 +331,7 @@ std::string mpd_control::get_current_tag(enum mpd_tag_type type)
     eventfd_write(_eventfd, 1);
 #endif
 
-    return promise_ptr->get_future().get();
+    return promise.get_future().get();
 }
 
 void mpd_control::add_external_task(std::function<void(mpd_connection *)> t)
