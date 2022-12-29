@@ -36,7 +36,7 @@ struct player_gui : player_view
 
     void update_cover_from_local_file(std::string filename);
     void update_cover_from_song_info(song_info const & info);
-    void update_cover_from_image_data(image_data const & data);
+    void update_cover_from_image_data(byte_array_slice data);
 
     private:
 

@@ -14,7 +14,7 @@ std::array<unique_texture_ptr, N> load_texture_array_from_files(SDL_Renderer * r
     std::array<unique_texture_ptr, N> result;
     for (int i = 0; i < N; ++i)
     {
-        result[i] = load_texture_from_image(r, filenames[i]);
+        result[i] = load_texture_from_file(r, filenames[i]);
     }
     return result;
 }

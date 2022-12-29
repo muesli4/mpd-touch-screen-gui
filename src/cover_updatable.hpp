@@ -16,7 +16,7 @@ struct cover_updatable
 {
     virtual void update_cover_from_local_file(std::string filename) = 0;
     virtual void update_cover_from_song_info(song_info const & info) = 0;
-    virtual void update_cover_from_image_data(image_data const & data) = 0;
+    virtual void update_cover_from_image_data(byte_array_slice data) = 0;
 };
 
 #endif
