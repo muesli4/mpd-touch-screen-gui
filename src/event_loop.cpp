@@ -29,9 +29,6 @@
 #include <libwtk-sdl2/widget.hpp>
 #include <libwtk-sdl2/widget_context.hpp>
 
-#include <boost/ptr_container/ptr_vector.hpp>
-
-#include "cover_provider.hpp"
 #include "filesystem_cover_provider.hpp"
 #include "mpd_cover_provider.hpp"
 #include "text_cover_provider.hpp"
@@ -278,23 +275,46 @@ event_loop::event_loop(SDL_Renderer * renderer, program_config const & cfg)
     });
 }
 
+void event_loop::fill_cover_providers_from_config(cover_config const & cfg, boost::ptr_vector<cover_provider> & cover_providers)
+{
+    for (auto const & source : cfg.sources)
+    {
+        // TODO better to parse an enum from the config and validate there
+        if (source == "albumart")
+        {
+            cover_providers.push_back(new mpd_cover_provider(_mpd_control, MPD_COVER_TYPE_ALBUMART));
+        }
+        else if (source == "readpicture")
+        {
+            cover_providers.push_back(new mpd_cover_provider(_mpd_control, MPD_COVER_TYPE_READPICTURE));
+        }
+        else if (source == "filesystem")
+        {
+            if (cfg.opt_filesystem_cover_provider.has_value())
+            {
+                cover_providers.push_back(new filesystem_cover_provider(cfg.opt_filesystem_cover_provider.value()));
+            }
+            else
+            {
+                std::cout << "Warning: Cover source 'filesystem' is missing configuration." << std::endl;
+            }
+        }
+        else
+        {
+            std::cout << "Warning: Unknown cover source '" << source << "'" << std::endl;
+        }
+    }
+
+    cover_providers.push_back(new text_cover_provider());
+}
+
 quit_action event_loop::run(program_config const & cfg)
 {
     // Set up user events.
     enum_user_event_sender<idle_timer_event_type> tes;
 
     boost::ptr_vector<cover_provider> cover_providers;
-
-    // add cover providers
-    {
-        cover_providers.push_back(new mpd_cover_provider(_mpd_control, MPD_COVER_TYPE_ALBUMART));
-        cover_providers.push_back(new mpd_cover_provider(_mpd_control, MPD_COVER_TYPE_READPICTURE));
-        if (cfg.cover.opt_directory.has_value())
-        {
-            cover_providers.push_back(new filesystem_cover_provider(cfg.cover));
-        }
-        cover_providers.push_back(new text_cover_provider());
-    }
+    fill_cover_providers_from_config(cfg.cover, cover_providers);
 
     idle_timer_info iti(tes);
 

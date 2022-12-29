@@ -10,13 +10,13 @@
 
 struct filesystem_cover_provider : cover_provider
 {
-    filesystem_cover_provider(cover_config const & config);
+    filesystem_cover_provider(filesystem_cover_provider_config const & config);
 
     bool update_cover(cover_updatable & u, song_data_provider const & p) const;
 
     private:
 
-    cover_config const & _config;
+    filesystem_cover_provider_config const & _config;
 };
 
 #endif

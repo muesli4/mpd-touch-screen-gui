@@ -67,19 +67,14 @@ static std::optional<std::string> find_cover_file(std::string_view const rel_son
     return std::nullopt;
 }
 
-filesystem_cover_provider::filesystem_cover_provider(cover_config const & config)
+filesystem_cover_provider::filesystem_cover_provider(filesystem_cover_provider_config const & config)
     : _config(config)
 {
-    // TODO instead of doing this pull up the optional to cover_config itself
-    if (!config.opt_directory.has_value())
-    {
-        throw std::invalid_argument("missing cover directory");
-    }
 }
 
 bool filesystem_cover_provider::update_cover(cover_updatable & u, song_data_provider const & p) const
 {
-    auto opt_cover_path = find_cover_file(p.get_song_path(), _config.opt_directory.value(), _config.names, _config.extensions);
+    auto opt_cover_path = find_cover_file(p.get_song_path(), _config.directory, _config.names, _config.extensions);
 
     bool found = opt_cover_path.has_value();
 

@@ -6,8 +6,11 @@
 
 #include <queue>
 
+#include <boost/ptr_container/ptr_vector.hpp>
+
 #include <SDL2/SDL.h>
 
+#include "cover_provider.hpp"
 #include "song_data_provider.hpp"
 #include "program_config.hpp"
 #include "navigation_event.hpp"
@@ -31,6 +34,8 @@ struct event_loop : private song_data_provider
     // get information about the current song
     song_info get_song_info() const;
     std::string get_song_path() const;
+
+    void fill_cover_providers_from_config(cover_config const & cfg, boost::ptr_vector<cover_provider> & cover_providers);
 
     void handle_other_event(SDL_Event const & e);
 

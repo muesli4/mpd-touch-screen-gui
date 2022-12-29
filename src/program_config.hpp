@@ -39,11 +39,17 @@ struct swipe_config
 };
 */
 
-struct cover_config
+struct filesystem_cover_provider_config
 {
-    std::optional<std::string> opt_directory;
+    std::string directory;
     std::vector<std::string> extensions;
     std::vector<std::string> names;
+};
+
+struct cover_config
+{
+    std::vector<std::string> sources;
+    std::optional<filesystem_cover_provider_config> opt_filesystem_cover_provider;
 };
 
 struct on_screen_keyboard_config

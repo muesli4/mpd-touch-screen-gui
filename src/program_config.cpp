@@ -47,42 +47,50 @@ bool parse_swipe_config(libconfig::Setting & s, swipe_config & result)
 }
 */
 
-bool parse_cover_config(libconfig::Setting & s, cover_config & result)
+bool parse_string_vector(libconfig::Setting & s, std::vector<std::string> & result)
 {
-    if (s.exists("extensions") && s.exists("names"))
+    if (s.isArray())
     {
-
-        libconfig::Setting & extensions_setting = s.lookup("extensions");
-        if (extensions_setting.isArray())
+        result.reserve(s.getLength());
+        for (auto & ns : s)
         {
-            result.extensions.reserve(extensions_setting.getLength());
-            for (auto & es : extensions_setting)
+            result.emplace_back(ns.operator std::string());
+        }
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+bool parse_filesystem_cover_provider_config(libconfig::Setting & s, filesystem_cover_provider_config & result)
+{
+    if (s.exists("extensions") && s.exists("names") && s.exists("directory"))
+    {
+        if (parse_string_vector(s.lookup("extensions"), result.extensions))
+        {
+            if (parse_string_vector(s.lookup("names"), result.names))
             {
-                result.extensions.emplace_back(es.operator std::string());
-            }
-
-            libconfig::Setting & names_setting = s.lookup("names");
-            
-            if (names_setting.isArray())
-            {
-                result.names.reserve(names_setting.getLength());
-                for (auto & ns : names_setting)
-                {
-                    result.names.emplace_back(ns.operator std::string());
-                }
-
-                std::string tmp;
-                if (s.lookupValue("directory", tmp))
-                    result.opt_directory = tmp;
-
-                return true;
+                return s.lookupValue("directory", result.directory);
             }
         }
+    }
+    return false;
+}
 
-
+bool parse_cover_config(libconfig::Setting & s, cover_config & result)
+{
+    filesystem_cover_provider_config filesystem_cover_provider;
+    if (parse_filesystem_cover_provider_config(s.lookup("filesystem"), filesystem_cover_provider))
+    {
+        result.opt_filesystem_cover_provider = filesystem_cover_provider;
     }
 
-    return false;
+    // Leave empty if it does not exist.
+    parse_string_vector(s.lookup("sources"), result.sources);
+
+    return true;
 }
 
 bool parse_on_screen_keyboard_config(libconfig::Setting & s, on_screen_keyboard_config & result)
