@@ -11,14 +11,17 @@ AM_CPPFLAGS = -DPKGDATA="\"$(pkgdatadir)\"" $(BOOST_CPPFLAGS) -DICONDIR='"$(pkgd
 bin_PROGRAMS = mpd-touch-screen-gui mpd-touch-screen-gui-send
 
 mpd_touch_screen_gui_SOURCES =  \
+	byte_buffer.cpp               \
 	config_file.cpp               \
 	cover_view.cpp                \
+	dynamic_image_data.cpp        \
 	event_loop.cpp                \
 	filesystem_cover_provider.cpp \
 	idle_timer.cpp                \
 	keypad.cpp                    \
 	main.cpp                      \
 	mpd_control.cpp               \
+	mpd_cover_provider.cpp        \
 	navigation_event.cpp          \
 	player_gui.cpp                \
 	player_mpd_model.cpp          \

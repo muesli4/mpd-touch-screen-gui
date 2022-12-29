@@ -5,9 +5,12 @@
 #include <chrono>
 #include <thread>
 #include <cstring>
+#include <cinttypes>
+
+#include "byte_buffer.hpp"
+#include "util.hpp"
 
 #include "mpd_control.hpp"
-#include "util.hpp"
 
 #ifdef USE_POLL
 #include <sys/eventfd.h>
@@ -352,4 +355,78 @@ void mpd_control::add_external_task(std::function<void(mpd_connection *)> t)
 void mpd_control::new_song_cb(mpd_song * s)
 {
     _new_song_cb(s != nullptr ? std::make_optional(song_location{ mpd_song_get_uri(s), mpd_song_get_pos(s) }) : std::nullopt);
+}
+
+std::optional<dynamic_image_data> mpd_control::get_cover(std::string path,
+                                                         bool (* send_fun)(mpd_connection *, char const *, unsigned),
+                                                         int (* recv_fun)(mpd_connection *, void *, size_t),
+                                                         int (* run_fun)(mpd_connection *, char const *, unsigned, void *, size_t))
+{
+    std::promise<std::optional<dynamic_image_data>> result;
+
+    add_external_task([&result, &path, send_fun, recv_fun, run_fun](mpd_connection * c)
+    {
+
+        byte_buffer buffer;
+        size_t current_offset = 0;
+        size_t size = 0;
+        send_fun(c, path.c_str(), 0);
+        mpd_pair * pair = mpd_recv_pair(c);
+
+        // this fails if nothing was found
+        if (pair != NULL)
+        {
+            if (strcmp(pair->name, "size") == 0)
+            {
+                size = strtoumax(pair->value, nullptr, 10);
+                buffer = std::move(byte_buffer(size));
+            }
+            mpd_return_pair(c, pair);
+        }
+        else
+        {
+            mpd_connection_clear_error(c);
+        }
+
+        if (size != 0)
+        {
+            // TODO we need to swap the external task queue every time we
+            // change from idle, otherwise it will stay in there the whole time
+            int read_bytes = recv_fun(c, buffer.data(), buffer.size());
+            current_offset += read_bytes;
+            if (mpd_response_finish(c))
+            {
+                while (read_bytes > 0)
+                {
+                    read_bytes =
+                        run_fun(c, path.c_str(), current_offset,
+                                buffer.data() + current_offset,
+                                buffer.size() - current_offset);
+                    current_offset += read_bytes;
+                }
+
+                if (read_bytes != -1)
+                {
+                    result.set_value(dynamic_image_data(buffer, current_offset));
+                    return;
+                }
+            }
+        }
+
+        result.set_value(std::nullopt);
+    });
+
+    return result.get_future().get();
+}
+
+
+
+std::optional<dynamic_image_data> mpd_control::get_albumart(std::string path)
+{
+    return get_cover(path, &mpd_send_albumart, &mpd_recv_albumart, &mpd_run_albumart);
+}
+
+std::optional<dynamic_image_data> mpd_control::get_readpicture(std::string path)
+{
+    return get_cover(path, &mpd_send_readpicture, &mpd_recv_readpicture, &mpd_run_readpicture);
 }

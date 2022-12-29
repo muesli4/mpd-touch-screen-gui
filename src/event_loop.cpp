@@ -33,6 +33,7 @@
 
 #include "cover_provider.hpp"
 #include "filesystem_cover_provider.hpp"
+#include "mpd_cover_provider.hpp"
 #include "text_cover_provider.hpp"
 #include "idle_timer.hpp"
 #include "navigation_event.hpp"
@@ -286,6 +287,8 @@ quit_action event_loop::run(program_config const & cfg)
 
     // add cover providers
     {
+        cover_providers.push_back(new mpd_cover_provider(_mpd_control, MPD_COVER_TYPE_ALBUMART));
+        cover_providers.push_back(new mpd_cover_provider(_mpd_control, MPD_COVER_TYPE_READPICTURE));
         if (cfg.cover.opt_directory.has_value())
         {
             cover_providers.push_back(new filesystem_cover_provider(cfg.cover));

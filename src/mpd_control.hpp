@@ -13,6 +13,8 @@
 
 #include <mpd/client.h>
 
+#include "dynamic_image_data.hpp"
+
 #if defined(HAVE_POLL_H) && defined(HAVE_SYS_EVENTFD_H) && defined(HAVE_UNISTD_H)
 #pragma message ( "Compiling with eventfd polling support." )
 #define USE_POLL
@@ -74,7 +76,15 @@ struct mpd_control
 
     playlist_change_info get_current_playlist_changes(unsigned int version);
 
+    std::optional<dynamic_image_data> get_albumart(std::string path);
+    std::optional<dynamic_image_data> get_readpicture(std::string path);
+
     private:
+
+    std::optional<dynamic_image_data> get_cover(std::string path,
+                                                bool (* send_fun)(mpd_connection *, char const *, unsigned),
+                                                int (* recv_fun)(mpd_connection *, void *, size_t),
+                                                int (* run_fun)(mpd_connection *, char const *, unsigned, void *, size_t));
 
     std::string get_current_tag(enum mpd_tag_type type);
 
