@@ -12,8 +12,9 @@
 #include "cover_view.hpp"
 // TODO split into type and sender
 #include "navigation_event.hpp"
+#include "cover_updatable.hpp"
 
-struct player_view
+struct player_view : cover_updatable
 {
     virtual void on_cover_updated(std::string cover_path) = 0;
     virtual void on_cover_updated(std::string title, std::string artist, std::string album) = 0;

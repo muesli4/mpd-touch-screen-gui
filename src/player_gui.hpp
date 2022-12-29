@@ -34,6 +34,10 @@ struct player_gui : player_view
     void on_other_event(SDL_Event const & e);
     void on_draw_dirty_event();
 
+    void update_cover_from_local_file(std::string filename);
+    void update_cover_from_song_info(song_info const & info);
+    void update_cover_from_image_data(image_data const & data);
+
     private:
 
     void handle_cover_swipe_direction(swipe_direction dir);

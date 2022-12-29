@@ -8,6 +8,7 @@
 
 #include <SDL2/SDL.h>
 
+#include "song_data_provider.hpp"
 #include "program_config.hpp"
 #include "navigation_event.hpp"
 #include "player_view.hpp"
@@ -19,13 +20,17 @@
 
 bool idle_timer_enabled(program_config const & cfg);
 
-struct event_loop
+struct event_loop : private song_data_provider
 {
     event_loop(SDL_Renderer * renderer, program_config const & cfg);
 
     quit_action run(program_config const & cfg);
 
     private:
+
+    // get information about the current song
+    song_info get_song_info() const;
+    std::string get_song_path() const;
 
     void handle_other_event(SDL_Event const & e);
 
@@ -46,9 +51,11 @@ struct event_loop
     bool _dimmed;
     bool _current_playlist_needs_refresh = true;
 
-    mpd_control _mpd_control;
+    // not considered as part of the state since just getting data is typically
+    // not possible in const functions
+    mutable mpd_control _mpd_control;
 
     player_mpd_model _model;
 
-    std::unique_ptr<player_view> _player_view;
+    std::shared_ptr<player_view> _player_view;
 };

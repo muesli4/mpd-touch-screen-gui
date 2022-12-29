@@ -10,22 +10,24 @@ AM_CPPFLAGS = -DPKGDATA="\"$(pkgdatadir)\"" $(BOOST_CPPFLAGS) -DICONDIR='"$(pkgd
 
 bin_PROGRAMS = mpd-touch-screen-gui mpd-touch-screen-gui-send
 
-mpd_touch_screen_gui_SOURCES = \
-	config_file.cpp              \
-	cover_view.cpp               \
-	event_loop.cpp               \
-	idle_timer.cpp               \
-	keypad.cpp                   \
-	main.cpp                     \
-	mpd_control.cpp              \
-	navigation_event.cpp         \
-	player_gui.cpp               \
-	player_mpd_model.cpp         \
-	program_config.cpp           \
-	search_view.cpp              \
-	udp_control.cpp              \
-	user_event.cpp               \
-	util.cpp                     \
+mpd_touch_screen_gui_SOURCES =  \
+	config_file.cpp               \
+	cover_view.cpp                \
+	event_loop.cpp                \
+	filesystem_cover_provider.cpp \
+	idle_timer.cpp                \
+	keypad.cpp                    \
+	main.cpp                      \
+	mpd_control.cpp               \
+	navigation_event.cpp          \
+	player_gui.cpp                \
+	player_mpd_model.cpp          \
+	program_config.cpp            \
+	search_view.cpp               \
+	text_cover_provider.cpp       \
+	udp_control.cpp               \
+	user_event.cpp                \
+	util.cpp                      \
 	widget_util.cpp
 
 mpd_touch_screen_gui_LDADD = $(SDL2_LIBS) $(SDL2_IMG_LIBS) $(LIBWTK_SDL2_LIBS) $(MPD_CLIENT_LIBS) $(ICU_UC_LIBS) $(CONFIG_LIBS) $(BOOST_FILESYSTEM_LIB) $(BOOST_SYSTEM_LIB) $(PTHREAD_LIBS) $(PTHREAD_CFLAGS)

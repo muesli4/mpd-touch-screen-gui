@@ -29,6 +29,11 @@
 #include <libwtk-sdl2/widget.hpp>
 #include <libwtk-sdl2/widget_context.hpp>
 
+#include <boost/ptr_container/ptr_vector.hpp>
+
+#include "cover_provider.hpp"
+#include "filesystem_cover_provider.hpp"
+#include "text_cover_provider.hpp"
 #include "idle_timer.hpp"
 #include "navigation_event.hpp"
 #include "udp_control.hpp"
@@ -277,6 +282,17 @@ quit_action event_loop::run(program_config const & cfg)
     // Set up user events.
     enum_user_event_sender<idle_timer_event_type> tes;
 
+    boost::ptr_vector<cover_provider> cover_providers;
+
+    // add cover providers
+    {
+        if (cfg.cover.opt_directory.has_value())
+        {
+            cover_providers.push_back(new filesystem_cover_provider(cfg.cover));
+        }
+        cover_providers.push_back(new text_cover_provider());
+    }
+
     idle_timer_info iti(tes);
 
     // timer is enabled
@@ -379,32 +395,12 @@ quit_action event_loop::run(program_config const & cfg)
                 // Avoid unnecessary I/O on slower devices.
                 if (_refresh_cover)
                 {
-                    cover_type ct;
-                    if (cfg.cover.opt_directory.has_value())
+                    for (auto const & p : cover_providers)
                     {
-                        auto opt_cover_path = find_cover_file(_current_song_path, cfg.cover.opt_directory.value(), cfg.cover.names, cfg.cover.extensions);
-
-                        if (opt_cover_path.has_value())
+                        if (p.update_cover(*_player_view, *this))
                         {
-                            ct = cover_type::IMAGE;
-                            _player_view->on_cover_updated(opt_cover_path.value());
+                            break;
                         }
-                        else
-                        {
-                            ct = cover_type::SONG_INFO;
-                        }
-                    }
-                    else
-                    {
-                        ct = cover_type::SONG_INFO;
-                    }
-
-                    if (ct == cover_type::SONG_INFO)
-                    {
-                        _player_view->on_cover_updated( _mpd_control.get_current_title()
-                                                      , _mpd_control.get_current_artist()
-                                                      , _mpd_control.get_current_album()
-                                                      );
                     }
                     _refresh_cover = false;
                 }
@@ -428,5 +424,19 @@ quit_action event_loop::run(program_config const & cfg)
     }
 
     return _model.get_quit_action();
+}
+
+song_info event_loop::get_song_info() const
+{
+    song_info result;
+    result.title = _mpd_control.get_current_title();
+    result.artist = _mpd_control.get_current_artist();
+    result.album = _mpd_control.get_current_album();
+    return result;
+}
+
+std::string event_loop::get_song_path() const
+{
+    return _current_song_path;
 }
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include <libwtk-sdl2/padding.hpp>
+#include <libwtk-sdl2/sdl_util.hpp>
 
 #include "player_gui.hpp"
 #include "widget_util.hpp"
@@ -108,12 +109,16 @@ void player_gui::handle_cover_swipe_direction(swipe_direction dir)
 
 void player_gui::on_cover_updated(std::string cover_path)
 {
-    _cover_view_ptr->set_cover(std::move(load_texture_from_image(_renderer, cover_path)));
+    update_cover_from_local_file(cover_path);
 }
 
 void player_gui::on_cover_updated(std::string title, std::string artist, std::string album)
 {
-    _cover_view_ptr->set_cover(title, artist, album);
+    song_info info;
+    info.title = title;
+    info.artist = artist;
+    info.album = album;
+    update_cover_from_song_info(info);
 }
 
 void player_gui::on_song_changed(unsigned int new_song_position)
@@ -174,5 +179,20 @@ void player_gui::on_other_event(SDL_Event const & e)
 void player_gui::on_draw_dirty_event()
 {
     _ctx.draw_dirty();
+}
+
+void player_gui::update_cover_from_local_file(std::string filename)
+{
+    _cover_view_ptr->set_cover(std::move(load_texture_from_image(_renderer, filename)));
+}
+
+void player_gui::update_cover_from_song_info(song_info const & info)
+{
+    _cover_view_ptr->set_cover(info.title, info.artist, info.album);
+}
+
+void player_gui::update_cover_from_image_data(image_data const & data)
+{
+    _cover_view_ptr->set_cover(std::move(load_texture_from_image_data(_renderer, data)));
 }
 
