@@ -20,6 +20,50 @@
 #define USE_POLL
 #endif
 
+template <typename F>
+class callback_deque
+{
+    typedef std::deque<std::function<F>> deque_type;
+    std::mutex _mutex;
+
+    deque_type _active_deque;
+    deque_type _buffer_deque;
+
+    public:
+
+    void add(std::function<F> && f)
+    {
+        std::scoped_lock lock(_mutex);
+        _active_deque.push_back(f);
+    }
+
+    template <typename... Args>
+    void run(Args... args)
+    {
+        // Keep locking time to a minimum by swapping out queues and because of
+        // that callbacks can add new callbacks that are not executed in the
+        // same batch.
+        {
+            std::scoped_lock lock(_mutex);
+            if (_active_deque.empty())
+            {
+                return;
+            }
+            else
+            {
+                _active_deque.swap(_buffer_deque);
+            }
+        }
+
+        do
+        {
+            _buffer_deque.front()(args...);
+            _buffer_deque.pop_front();
+        }
+        while (!_buffer_deque.empty());
+    }
+};
+
 struct playlist_change_info
 {
     typedef std::vector<std::pair<unsigned int, std::string>> diff_type;
@@ -88,10 +132,10 @@ struct mpd_control
 
     std::string get_current_tag(enum mpd_tag_type type);
 
-    void add_external_task(std::function<void(mpd_connection *)> t);
+    void add_external_task(std::function<void(mpd_connection *)> && t);
 
     template <typename R>
-    R add_external_task_with_return(std::function<R(mpd_connection *)> f)
+    R add_external_task_with_return(std::function<R(mpd_connection *)> && f)
     {
         auto promise_ptr = std::make_shared<std::promise<R>>();
         add_external_task([promise_ptr, f](mpd_connection * c)
@@ -112,11 +156,8 @@ struct mpd_control
     std::function<void()> _playlist_changed_cb;
     std::function<void(mpd_state)> _playback_state_changed_cb;
 
-    std::mutex _external_tasks_mutex;
-    std::deque<std::function<void(mpd_connection *)>> _external_tasks;
-
-    std::mutex _external_song_queries_mutex;
-    std::deque<std::function<void(mpd_connection *, mpd_song *)>> _external_song_queries;
+    callback_deque<void(mpd_connection *)> _external_tasks;
+    callback_deque<void(mpd_connection *, mpd_song *)> _external_song_queries;
 
 #ifdef USE_POLL
     // a file descriptor for thread communication

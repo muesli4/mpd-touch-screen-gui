@@ -113,28 +113,12 @@ void mpd_control::run()
             _random_cb(mpd_status_get_random(s));
             mpd_status_free(s);
         }
-        {
-            scoped_lock lock(_external_tasks_mutex);
-
-            while (!_external_tasks.empty())
-            {
-                _external_tasks.front()(_c);
-                _external_tasks.pop_front();
-            }
-        }
+        _external_tasks.run(_c);
         if (idle_event & MPD_IDLE_PLAYLIST)
         {
             _playlist_changed_cb();
         }
-        {
-            scoped_lock lock(_external_song_queries_mutex);
-
-            while (!_external_song_queries.empty())
-            {
-                _external_song_queries.front()(_c, last_song);
-                _external_song_queries.pop_front();
-            }
-        }
+        _external_song_queries.run(_c, last_song);
     }
     if (last_song != nullptr)
         mpd_song_free(last_song);
@@ -326,15 +310,12 @@ std::string mpd_control::get_current_tag(enum mpd_tag_type type)
 {
     std::promise<std::string> promise;
 
+    _external_song_queries.add([type, &promise](mpd_connection * c, mpd_song * s)
     {
-        scoped_lock lock(_external_song_queries_mutex);
-        _external_song_queries.push_back([type, &promise](mpd_connection * c, mpd_song * s)
-        {
-            std::string const value = s != nullptr ? string_from_ptr(mpd_song_get_tag(s, type, 0)) : "";
-            promise.set_value(value);
-        }
-        );
+        std::string const value = s != nullptr ? string_from_ptr(mpd_song_get_tag(s, type, 0)) : "";
+        promise.set_value(value);
     }
+    );
 
 #ifdef USE_POLL
     eventfd_write(_eventfd, 1);
@@ -343,10 +324,9 @@ std::string mpd_control::get_current_tag(enum mpd_tag_type type)
     return promise.get_future().get();
 }
 
-void mpd_control::add_external_task(std::function<void(mpd_connection *)> t)
+void mpd_control::add_external_task(std::function<void(mpd_connection *)> && t)
 {
-    scoped_lock lock(_external_tasks_mutex);
-    _external_tasks.push_back(t);
+    _external_tasks.add(std::move(t));
 #ifdef USE_POLL
     eventfd_write(_eventfd, 1);
 #endif
