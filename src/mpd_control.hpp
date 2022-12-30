@@ -137,12 +137,12 @@ struct mpd_control
     template <typename R>
     R add_external_task_with_return(std::function<R(mpd_connection *)> && f)
     {
-        auto promise_ptr = std::make_shared<std::promise<R>>();
-        add_external_task([promise_ptr, f](mpd_connection * c)
+        std::promise<R> promise;
+        add_external_task([&promise, f](mpd_connection * c)
         {
-            promise_ptr->set_value(f(c));
+            promise.set_value(f(c));
         });
-        return promise_ptr->get_future().get();
+        return promise.get_future().get();
     }
 
     void new_song_cb(mpd_song * s);
