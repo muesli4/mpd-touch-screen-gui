@@ -348,11 +348,11 @@ std::optional<dynamic_image_data> mpd_control::get_cover(std::string path,
 {
     std::promise<std::optional<dynamic_image_data>> result;
 
-    add_external_task([&result, &path, send_fun, recv_fun, run_fun](mpd_connection * c)
-    {
+    byte_buffer buffer;
+    size_t current_offset = 0;
 
-        byte_buffer buffer;
-        size_t current_offset = 0;
+    add_external_task([this, &result, &buffer, &current_offset, &path, send_fun, recv_fun, run_fun](mpd_connection * c)
+    {
         size_t size = 0;
         send_fun(c, path.c_str(), 0);
         mpd_pair * pair = mpd_recv_pair(c);
@@ -374,36 +374,50 @@ std::optional<dynamic_image_data> mpd_control::get_cover(std::string path,
 
         if (size != 0)
         {
-            // TODO we need to swap the external task queue every time we
-            // change from idle, otherwise it will stay in there the whole time
             int read_bytes = recv_fun(c, buffer.data(), buffer.size());
             current_offset += read_bytes;
             if (mpd_response_finish(c))
             {
-                while (read_bytes > 0)
-                {
-                    read_bytes =
-                        run_fun(c, path.c_str(), current_offset,
-                                buffer.data() + current_offset,
-                                buffer.size() - current_offset);
-                    current_offset += read_bytes;
-                }
-
-                if (read_bytes != -1)
-                {
-                    result.set_value(dynamic_image_data(buffer, current_offset));
-                    return;
-                }
+                handle_read_cover_chunk_result(result, buffer, current_offset, path, run_fun, read_bytes);
+                return;
             }
         }
-
         result.set_value(std::nullopt);
     });
 
     return result.get_future().get();
 }
 
+void mpd_control::handle_read_cover_chunk_result(std::promise<std::optional<dynamic_image_data>> & result, byte_buffer & buffer, size_t & current_offset, std::string const & path,
+                                                 int (* run_fun)(mpd_connection *, char const *, unsigned, void *, size_t), int read_bytes)
+{
+    if (read_bytes < 0)
+    {
+        result.set_value(std::nullopt);
+    }
+    else if (current_offset == buffer.size())
+    {
+        result.set_value(std::make_optional<dynamic_image_data>(buffer, current_offset));
+    }
+    else
+    {
+        add_external_task([this, &result, &buffer, &current_offset, &path, run_fun](mpd_connection * c)
+        {
+            read_cover_chunk(c, result, buffer, current_offset, path, run_fun);
+        });
+    }
+}
 
+void mpd_control::read_cover_chunk(mpd_connection * c, std::promise<std::optional<dynamic_image_data>> & result, byte_buffer & buffer, size_t & current_offset, std::string const & path,
+                             int (* run_fun)(mpd_connection *, char const *, unsigned, void *, size_t))
+{
+    int read_bytes =
+        run_fun(c, path.c_str(), current_offset,
+                buffer.data() + current_offset,
+                buffer.size() - current_offset);
+    current_offset += read_bytes;
+    handle_read_cover_chunk_result(result, buffer, current_offset, path, run_fun, read_bytes);
+}
 
 std::optional<dynamic_image_data> mpd_control::get_albumart(std::string path)
 {

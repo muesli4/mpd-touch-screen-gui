@@ -135,6 +135,10 @@ struct mpd_control
                                                 bool (* send_fun)(mpd_connection *, char const *, unsigned),
                                                 int (* recv_fun)(mpd_connection *, void *, size_t),
                                                 int (* run_fun)(mpd_connection *, char const *, unsigned, void *, size_t));
+    void read_cover_chunk(mpd_connection * c, std::promise<std::optional<dynamic_image_data>> & result, byte_buffer & buffer, size_t & current_offset, std::string const & path,
+                          int (* run_fun)(mpd_connection *, char const *, unsigned, void *, size_t));
+    void handle_read_cover_chunk_result(std::promise<std::optional<dynamic_image_data>> & result, byte_buffer & buffer, size_t & current_offset, std::string const & path,
+                                        int (* run_fun)(mpd_connection *, char const *, unsigned, void *, size_t), int read_bytes);
 
     std::string get_current_tag(enum mpd_tag_type type);
 
