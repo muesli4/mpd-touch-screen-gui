@@ -51,6 +51,38 @@ mpd_control::~mpd_control()
 #endif
 }
 
+void mpd_control::wait()
+{
+#ifdef USE_POLL
+    // wake up if the thread signals it or the mpd server sends a
+    // response
+    struct pollfd pollfds[] =
+        { { _eventfd, POLLIN, 0}
+        , { mpd_connection_get_fd(_c), POLLIN, 0}
+        };
+    if (poll(pollfds, 2, -1) <= 0)
+    {
+        // error with poll, fall back to waiting
+#endif
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+#ifdef USE_POLL
+    }
+    else
+    {
+        uint64_t dummy;
+        eventfd_read(_eventfd, &dummy);
+    }
+#endif
+}
+
+void mpd_control::notify()
+{
+#ifdef USE_POLL
+    // wake up from poll
+    eventfd_write(_eventfd, 1);
+#endif
+}
+
 void mpd_control::run()
 {
     mpd_song * last_song = mpd_run_current_song(_c);
@@ -61,28 +93,7 @@ void mpd_control::run()
     {
         mpd_send_idle_mask(_c, static_cast<mpd_idle>(MPD_IDLE_PLAYER | MPD_IDLE_OPTIONS | MPD_IDLE_PLAYLIST));
 
-#ifdef USE_POLL
-        {
-            // wake up if the thread signals it or the mpd server sends a
-            // response
-            struct pollfd pollfds[] =
-                { { _eventfd, POLLIN, 0}
-                , { mpd_connection_get_fd(_c), POLLIN, 0}
-                };
-            if (poll(pollfds, 2, -1) <= 0)
-            {
-                // error with poll, fall back to waiting
-#endif
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-#ifdef USE_POLL
-            }
-            else
-            {
-                uint64_t dummy;
-                eventfd_read(_eventfd, &dummy);
-            }
-        }
-#endif
+        wait();
 
         enum mpd_idle idle_event = mpd_run_noidle(_c);
         if (idle_event & MPD_IDLE_PLAYER)
@@ -127,10 +138,7 @@ void mpd_control::run()
 void mpd_control::stop()
 {
     _run = false;
-#ifdef USE_POLL
-    // wake up from poll
-    eventfd_write(_eventfd, 1);
-#endif
+    notify();
 }
 
 void mpd_control::toggle_pause()
@@ -317,9 +325,7 @@ std::string mpd_control::get_current_tag(enum mpd_tag_type type)
     }
     );
 
-#ifdef USE_POLL
-    eventfd_write(_eventfd, 1);
-#endif
+    notify();
 
     return promise.get_future().get();
 }
@@ -327,9 +333,7 @@ std::string mpd_control::get_current_tag(enum mpd_tag_type type)
 void mpd_control::add_external_task(std::function<void(mpd_connection *)> && t)
 {
     _external_tasks.add(std::move(t));
-#ifdef USE_POLL
-    eventfd_write(_eventfd, 1);
-#endif
+    notify();
 }
 
 void mpd_control::new_song_cb(mpd_song * s)

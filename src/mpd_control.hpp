@@ -125,6 +125,12 @@ struct mpd_control
 
     private:
 
+    // wait for next event
+    void wait();
+
+    // wake up event loop to handle local events
+    void notify();
+
     std::optional<dynamic_image_data> get_cover(std::string path,
                                                 bool (* send_fun)(mpd_connection *, char const *, unsigned),
                                                 int (* recv_fun)(mpd_connection *, void *, size_t),
