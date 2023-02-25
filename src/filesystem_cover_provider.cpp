@@ -57,7 +57,7 @@ static std::optional<std::string> find_cover_file(std::string_view const rel_son
         {
             for (auto const & ext : extensions)
             {
-                std::string const cover_path = abs_cover_dir + '/' + name + "." + ext;
+                std::string const cover_path = abs_cover_dir + PATH_SEP + name + "." + ext;
                 if (boost::filesystem::exists(boost::filesystem::path(cover_path)))
                 {
                     return cover_path;
