@@ -6,6 +6,8 @@
 #include <thread>
 #include <cstring>
 #include <cinttypes>
+#define FRIBIDI_NO_DEPRECATED
+#include <fribidi/fribidi.h>
 
 #include "byte_buffer.hpp"
 #include "util.hpp"
@@ -261,8 +263,30 @@ std::string format_playlist_song(mpd_song * s)
         artist = nullptr;
     }
 
-    return (artist == nullptr ? "" : std::string(artist) + " - ")
+    std::string song_orig = (artist == nullptr ? "" : std::string(artist) + " - ")
            + string_from_ptr(mpd_song_get_tag(s, MPD_TAG_TITLE, 0));
+    // Code written with help of chatGPT
+    // Determine song_orig string length
+    const int song_orig_len = song_orig.size();
+    // Allocate memory for song_orig buffer
+    FriBidiChar* song_orig_buf = new FriBidiChar[song_orig_len + 1];
+    // Convert song_orig string to Unicode and store in song_orig buffer
+    const int song_orig_buf_len = fribidi_charset_to_unicode(
+        FRIBIDI_CHAR_SET_UTF8, song_orig.c_str(), song_orig_len, song_orig_buf);
+    // Allocate memory for song_visual buffer
+    FriBidiChar* song_visual_buf = new FriBidiChar[song_orig_buf_len + 1];
+    // Perform bidi-reversal on song_orig buffer and store in song_visual buffer
+    FriBidiParType direction = FRIBIDI_PAR_RTL;
+    fribidi_log2vis(song_orig_buf, song_orig_buf_len, &direction, song_visual_buf, nullptr, nullptr, nullptr);
+    // Convert song_visual buffer back to song_orig charset and store in song_visual string
+    char* song_visual = new char[song_orig_len + 1];
+    fribidi_unicode_to_charset(FRIBIDI_CHAR_SET_UTF8, song_visual_buf, song_orig_buf_len, song_visual);
+    std::string song_visual_str(song_visual);
+    // Free memory
+    delete[] song_orig_buf;
+    delete[] song_visual_buf;
+    delete[] song_visual;
+    return song_visual_str;
 }
 
 std::pair<std::vector<std::string>, unsigned int> mpd_control::get_current_playlist()
