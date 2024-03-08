@@ -397,7 +397,7 @@ void mpd_control::handle_read_cover_chunk_result(std::promise<std::optional<dyna
     }
     else if (current_offset == buffer.size())
     {
-        result.set_value(std::make_optional<dynamic_image_data>(buffer, current_offset));
+        result.set_value(std::make_optional<dynamic_image_data>(std::move(buffer), current_offset));
     }
     else
     {

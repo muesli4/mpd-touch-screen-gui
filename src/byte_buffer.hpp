@@ -15,8 +15,7 @@ struct byte_buffer
     byte_buffer(std::unique_ptr<std::byte[]> && p, size_t size);
     explicit byte_buffer(size_t size);
     byte_buffer(byte_buffer const & other);
-
-    byte_buffer(byte_buffer && other) = default;
+    byte_buffer(byte_buffer && other);
     byte_buffer & operator=(byte_buffer && other) = default;
 
     std::byte * data();

@@ -12,7 +12,7 @@
 // Owns image data.
 struct dynamic_image_data
 {
-    dynamic_image_data(byte_buffer buffer, size_t size);
+    dynamic_image_data(byte_buffer && buffer, size_t size);
 
     operator byte_array_slice();
 

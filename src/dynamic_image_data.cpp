@@ -4,7 +4,7 @@
 
 #include "dynamic_image_data.hpp"
 
-dynamic_image_data::dynamic_image_data(byte_buffer buffer, size_t size)
+dynamic_image_data::dynamic_image_data(byte_buffer && buffer, size_t size)
     : _buffer(std::move(buffer))
     , _size(size)
 {

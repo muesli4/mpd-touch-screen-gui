@@ -35,6 +35,12 @@ byte_buffer::byte_buffer(byte_buffer const & other)
     std::memcpy(_data.get(), other.data(), other.size());
 }
 
+byte_buffer::byte_buffer(byte_buffer && other)
+    : _size(other._size)
+    , _data(std::move(other._data))
+{
+}
+
 std::byte * byte_buffer::data()
 {
     return _data.get();
