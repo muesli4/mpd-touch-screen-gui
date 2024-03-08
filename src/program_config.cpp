@@ -88,7 +88,35 @@ bool parse_cover_config(libconfig::Setting & s, cover_config & result)
     }
 
     // Leave empty if it does not exist.
-    parse_string_vector(s.lookup("sources"), result.sources);
+    {
+        std::vector<std::string> tmp;
+        if (parse_string_vector(s.lookup("sources"), tmp))
+        {
+            for (auto const & s : tmp)
+            {
+                cover_source source;
+
+                if (s == "albumart")
+                {
+                    source = cover_source::ALBUMART;
+                }
+                else if (s == "readpicture")
+                {
+                    source = cover_source::READPICTURE;
+                }
+                else if (s == "filesystem")
+                {
+                    source = cover_source::FILESYSTEM;
+                }
+                else
+                {
+                    throw std::runtime_error("Unknown cover source '" + s + "'");
+                }
+
+                result.sources.push_back(source);
+            }
+        }
+    }
 
     return true;
 }

@@ -277,18 +277,17 @@ event_loop::event_loop(SDL_Renderer * renderer, program_config const & cfg)
 
 void event_loop::fill_cover_providers_from_config(cover_config const & cfg, boost::ptr_vector<cover_provider> & cover_providers)
 {
-    for (auto const & source : cfg.sources)
+    for (auto source : cfg.sources)
     {
-        // TODO better to parse an enum from the config and validate there
-        if (source == "albumart")
+        if (source == cover_source::ALBUMART)
         {
             cover_providers.push_back(new mpd_cover_provider(_mpd_control, MPD_COVER_TYPE_ALBUMART));
         }
-        else if (source == "readpicture")
+        else if (source == cover_source::READPICTURE)
         {
             cover_providers.push_back(new mpd_cover_provider(_mpd_control, MPD_COVER_TYPE_READPICTURE));
         }
-        else if (source == "filesystem")
+        else if (source == cover_source::FILESYSTEM)
         {
             if (cfg.opt_filesystem_cover_provider.has_value())
             {
@@ -298,10 +297,6 @@ void event_loop::fill_cover_providers_from_config(cover_config const & cfg, boos
             {
                 std::cout << "Warning: Cover source 'filesystem' is missing configuration." << std::endl;
             }
-        }
-        else
-        {
-            std::cout << "Warning: Unknown cover source '" << source << "'" << std::endl;
         }
     }
 

@@ -143,7 +143,7 @@ int main(int argc, char * argv[])
                         return 1;
                     }
                 }
-                catch (libconfig::ConfigException const & e)
+                catch (std::exception const & e)
                 {
                     cerr << e.what() << endl;
                 }

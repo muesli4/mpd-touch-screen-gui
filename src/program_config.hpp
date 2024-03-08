@@ -46,9 +46,16 @@ struct filesystem_cover_provider_config
     std::vector<std::string> names;
 };
 
+enum class cover_source
+{
+    ALBUMART,
+    READPICTURE,
+    FILESYSTEM
+};
+
 struct cover_config
 {
-    std::vector<std::string> sources;
+    std::vector<cover_source> sources;
     std::optional<filesystem_cover_provider_config> opt_filesystem_cover_provider;
 };
 
