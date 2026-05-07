@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+#include <algorithm>
 #include "filesystem_cover_provider.hpp"
 #include "util.hpp"
 
