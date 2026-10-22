@@ -183,7 +183,7 @@ void player_gui::on_draw_dirty_event()
 
 void player_gui::update_cover_from_local_file(std::string filename)
 {
-    _cover_view_ptr->set_cover(std::move(load_texture_from_file(_renderer, filename)));
+    _cover_view_ptr->set_cover(load_texture_from_file(_renderer, filename));
 }
 
 void player_gui::update_cover_from_song_info(song_info const & info)
@@ -193,6 +193,6 @@ void player_gui::update_cover_from_song_info(song_info const & info)
 
 void player_gui::update_cover_from_image_data(byte_array_slice data)
 {
-    _cover_view_ptr->set_cover(std::move(load_texture_from_memory(_renderer, data)));
+    _cover_view_ptr->set_cover(load_texture_from_memory(_renderer, data));
 }
 
