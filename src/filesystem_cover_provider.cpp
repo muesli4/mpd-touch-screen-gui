@@ -5,6 +5,8 @@
 #include "filesystem_cover_provider.hpp"
 #include "util.hpp"
 
+#include <algorithm>
+
 static std::string_view remove_first_directory(std::string_view path)
 {
     std::size_t pos = path.find(PATH_SEP);
